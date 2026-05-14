@@ -1,7 +1,9 @@
-import { randomBytes } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { env } from '../config/env.js';
 import { hashPassword } from '../utils/password.js';
+
+const DEFAULT_PASSWORD = 'admin';
+const DEFAULT_PIN = '000000';
 
 async function main() {
   await prisma.shop.upsert({
@@ -13,37 +15,38 @@ async function main() {
     },
   });
 
-  const existing = await prisma.user.findFirst({
-    where: { shopId: env.defaultShopId, username: 'admin' },
+  const passwordHash = await hashPassword(DEFAULT_PASSWORD);
+
+  await prisma.user.upsert({
+    where: { id: 'admin-user' },
+    update: {
+      username: 'admin',
+      displayName: 'ผู้ดูแลระบบ',
+      passwordHash,
+      pin: DEFAULT_PIN,
+      role: 'Admin',
+      isActive: true,
+      shopId: env.defaultShopId,
+    },
+    create: {
+      id: 'admin-user',
+      shopId: env.defaultShopId,
+      username: 'admin',
+      displayName: 'ผู้ดูแลระบบ',
+      passwordHash,
+      pin: DEFAULT_PIN,
+      role: 'Admin',
+      isActive: true,
+    },
   });
 
-  if (!existing) {
-    const tempPassword = randomBytes(8).toString('hex');
-    const tempPin = String(Math.floor(100000 + Math.random() * 900000));
-
-    await prisma.user.create({
-      data: {
-        id: 'admin-user',
-        shopId: env.defaultShopId,
-        username: 'admin',
-        displayName: 'ผู้ดูแลระบบ',
-        passwordHash: await hashPassword(tempPassword),
-        pin: tempPin,
-        role: 'Admin',
-        isActive: true,
-      },
-    });
-
-    console.log('========================================');
-    console.log('[SEED] Admin account created (one-time):');
-    console.log(`  username : admin`);
-    console.log(`  password : ${tempPassword}`);
-    console.log(`  PIN      : ${tempPin}`);
-    console.log('  Change these credentials immediately!');
-    console.log('========================================');
-  } else {
-    console.log('[SEED] Admin already exists — skipped.');
-  }
+  console.log('========================================');
+  console.log('[SEED] Admin account ready:');
+  console.log(`  username : admin`);
+  console.log(`  password : ${DEFAULT_PASSWORD}`);
+  console.log(`  PIN      : ${DEFAULT_PIN}`);
+  console.log('  Change these credentials after login!');
+  console.log('========================================');
 }
 
 main()
