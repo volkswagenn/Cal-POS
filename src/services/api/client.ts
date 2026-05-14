@@ -35,9 +35,10 @@ async function tryRefreshToken(): Promise<string | null> {
   })
     .then(async (res) => {
       if (!res.ok) { logout(); return null; }
-      const data = await res.json() as { accessToken: string; refreshToken: string };
-      setSession(user, data);
-      return data.accessToken;
+      const data = await res.json() as { tokens: { accessToken: string; refreshToken: string } };
+      if (!data?.tokens?.accessToken) { logout(); return null; }
+      setSession(user, data.tokens);
+      return data.tokens.accessToken;
     })
     .catch(() => { logout(); return null; })
     .finally(() => { isRefreshing = false; refreshPromise = null; });
