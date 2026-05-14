@@ -18,7 +18,34 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefreshToken(): Promise<string | null> {
+  if (isRefreshing && refreshPromise) return refreshPromise;
+
+  const { refreshToken, setSession, logout, user } = useAuthStore.getState();
+  if (!refreshToken || !user) return null;
+
+  isRefreshing = true;
+  refreshPromise = fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  })
+    .then(async (res) => {
+      if (!res.ok) { logout(); return null; }
+      const data = await res.json() as { accessToken: string; refreshToken: string };
+      setSession(user, data);
+      return data.accessToken;
+    })
+    .catch(() => { logout(); return null; })
+    .finally(() => { isRefreshing = false; refreshPromise = null; });
+
+  return refreshPromise;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}, _retry = true): Promise<T> {
   if (!hasApiBaseUrl) throw new ApiError('API base URL is not configured', 0);
 
   const token = useAuthStore.getState().accessToken;
@@ -38,13 +65,19 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     headers,
   });
 
+  if (response.status === 401 && _retry) {
+    const newToken = await tryRefreshToken();
+    if (newToken) return apiRequest<T>(path, init, false);
+    throw new ApiError('Unauthorized', 401);
+  }
+
   const payload = response.headers.get('content-type')?.includes('application/json')
     ? await response.json()
     : await response.text();
 
   if (!response.ok) {
     const message = typeof payload === 'object' && payload && 'message' in payload
-      ? String(payload.message)
+      ? String((payload as Record<string, unknown>).message)
       : `API request failed with status ${response.status}`;
     throw new ApiError(message, response.status, payload);
   }
@@ -72,7 +105,7 @@ export async function apiBlobRequest(path: string, init: RequestInit = {}) {
       ? await response.json()
       : await response.text();
     const message = typeof payload === 'object' && payload && 'message' in payload
-      ? String(payload.message)
+      ? String((payload as Record<string, unknown>).message)
       : `API request failed with status ${response.status}`;
     throw new ApiError(message, response.status, payload);
   }
