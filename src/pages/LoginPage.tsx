@@ -5,7 +5,7 @@ import { UserRepository, ADMIN_RESET_PIN } from '../db/repositories/UserReposito
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { authApi } from '../services/api/authApi';
-import { hasApiBaseUrl } from '../services/api/client';
+import { ApiError, hasApiBaseUrl } from '../services/api/client';
 import type { AuthTokens, User } from '../types';
 
 const RESET_PIN_LENGTH = 6;
@@ -34,6 +34,7 @@ export function LoginPage() {
     }
     let user: User | null = null;
     let tokens: AuthTokens | undefined;
+    let apiAuthRejected = false;
 
     if (hasApiBaseUrl) {
       try {
@@ -42,12 +43,14 @@ export function LoginPage() {
           : await authApi.loginWithPin(pin);
         user = result.user;
         tokens = result.tokens;
-      } catch {
-        user = null;
+      } catch (error) {
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          apiAuthRejected = true;
+        }
       }
     }
 
-    if (!user) {
+    if (!user && !apiAuthRejected) {
       user = mode === 'password'
         ? await UserRepository.loginByUsername(username, password)
         : await UserRepository.loginByPin(pin);
@@ -56,6 +59,10 @@ export function LoginPage() {
     if (!user) {
       toast('เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล', 'error');
       return;
+    }
+
+    if (hasApiBaseUrl && !tokens) {
+      toast('เซิร์ฟเวอร์ออฟไลน์ — ใช้งานแบบเครื่องเดียวชั่วคราว ข้อมูลจะไม่ sync', 'error');
     }
     setSession(user, tokens);
     toast(`ยินดีต้อนรับ ${user.displayName}`, 'success');

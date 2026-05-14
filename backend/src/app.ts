@@ -29,8 +29,18 @@ export async function buildApp() {
     timeWindow: '1 minute',
   });
 
+  const allowedOrigins = env.frontendOrigin === '*'
+    ? null
+    : new Set(env.frontendOrigin.split(',').map((s) => s.trim()).filter(Boolean));
+
   await app.register(cors, {
-    origin: env.frontendOrigin === '*' ? true : env.frontendOrigin,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins === null) return cb(null, true);
+      if (allowedOrigins.has(origin)) return cb(null, true);
+      if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/.test(origin)) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
   });
 
