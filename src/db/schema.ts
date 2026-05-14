@@ -1,0 +1,16 @@
+export const stores = [
+  'users',
+  'categories',
+  'products',
+  'sales',
+  'sale_items',
+  'payments',
+  'discount_logs',
+  'activity_logs',
+  'settings',
+  'parked_bills',
+  'external_report_exports',
+  'external_report_imports',
+  'external_report_rows',
+  'sync_queue',
+] as const;

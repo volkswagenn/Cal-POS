@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: cal-pos-backend
+    runtime: node
+    region: singapore
+    rootDir: backend
+    buildCommand: npm install && npm run build && npx prisma generate
+    startCommand: npx prisma migrate deploy && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
