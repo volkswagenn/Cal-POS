@@ -6,7 +6,7 @@ export function sha256(value: string) {
 }
 
 export async function hashPassword(value: string) {
-  return bcrypt.hash(value, 12);
+  return bcrypt.hash(value, 10);
 }
 
 export async function verifyPassword(value: string, storedHash: string) {
