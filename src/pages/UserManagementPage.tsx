@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Delete, Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
@@ -440,68 +440,20 @@ export function UserManagementPage() {
               </div>
             )}
 
-            {/* PIN 6-digit pad */}
-            <div className="block text-sm font-bold text-slate-700">
-              PIN <span className="font-normal text-xs text-slate-400">(6 หลัก)</span>
-              {/* dot indicators */}
-              <div className="mt-2 flex justify-center gap-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`h-4 w-4 rounded-full border-2 transition-all duration-150 ${
-                      i < userForm.pin.length
-                        ? 'scale-110 border-primary-600 bg-primary-600'
-                        : 'border-slate-300 bg-transparent'
-                    }`}
-                  />
-                ))}
-              </div>
-              {/* numpad */}
-              <div className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
-                {['1','2','3','4','5','6','7','8','9'].map((d) => (
-                  <button
-                    key={d} type="button"
-                    onClick={() => { if (userForm.pin.length < 6) setUserForm({ ...userForm, pin: userForm.pin + d }); }}
-                    className="bg-white py-3.5 text-xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700"
-                  >
-                    {d}
-                  </button>
-                ))}
-                <button type="button"
-                  onClick={() => setUserForm({ ...userForm, pin: '' })}
-                  className="bg-white py-3.5 text-xs font-bold text-slate-400 active:bg-slate-50"
-                >
-                  ล้าง
-                </button>
-                <button
-                  key="0" type="button"
-                  onClick={() => { if (userForm.pin.length < 6) setUserForm({ ...userForm, pin: userForm.pin + '0' }); }}
-                  className="bg-white py-3.5 text-xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700"
-                >
-                  0
-                </button>
-                <button type="button"
-                  onClick={() => setUserForm({ ...userForm, pin: userForm.pin.slice(0, -1) })}
-                  disabled={userForm.pin.length === 0}
-                  className="flex items-center justify-center bg-white py-3.5 active:bg-slate-50 disabled:opacity-30"
-                >
-                  <Delete size={20} className="text-slate-600" />
-                </button>
-              </div>
-              {/* hidden input for form validation */}
+            <label className="block text-sm font-bold text-slate-700">
+              PIN <span className="font-normal text-xs text-slate-400">(ตัวเลข 6 หลัก)</span>
               <input
-                type="text"
+                inputMode="numeric"
+                className="mt-1 w-full rounded-md border-slate-300 text-center text-xl font-black tracking-widest"
                 value={userForm.pin}
-                readOnly
-                className="sr-only"
-                required
+                onChange={(e) => setUserForm({ ...userForm, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
                 minLength={6}
                 maxLength={6}
                 pattern="\d{6}"
                 title="PIN ต้องเป็นตัวเลข 6 หลัก"
-                tabIndex={-1}
+                required
               />
-            </div>
+            </label>
 
             <div className="block text-sm font-bold text-slate-700">
               ตำแหน่ง
