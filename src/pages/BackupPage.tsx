@@ -89,6 +89,18 @@ export function BackupPage() {
         setIsClearing(false);
         return;
       }
+
+      // 1. Clear cloud first (so other devices won't re-push old data back)
+      if (hasApiBaseUrl && navigator.onLine) {
+        try {
+          await backupApi.clearAllData(clearAllPin);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'ล้างข้อมูล cloud ไม่สำเร็จ';
+          toast(`เตือน: ${message} (จะล้างเฉพาะเครื่องนี้)`, 'error');
+        }
+      }
+
+      // 2. Clear local Dexie
       await SettingsRepository.clearAllData();
       await seedDatabase();
       toast('ล้างข้อมูลสำเร็จ ระบบถูกรีเซ็ตเป็นค่าเริ่มต้นแล้ว', 'success');

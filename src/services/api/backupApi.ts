@@ -36,4 +36,11 @@ export const backupApi = {
       body: JSON.stringify({ adminPin }),
     });
   },
+
+  clearAllData(adminPin: string) {
+    return apiRequest<{ ok: true; salesDeleted: number }>('/api/backup/data', {
+      method: 'DELETE',
+      body: JSON.stringify({ adminPin }),
+    });
+  },
 };

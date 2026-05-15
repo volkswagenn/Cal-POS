@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/permission.js';
+import { prisma } from '../../db/prisma.js';
 import {
   buildBackupData,
+  clearAllShopData,
   createBackupSnapshot,
   deleteBackupSnapshot,
   listBackupSnapshots,
@@ -45,5 +47,19 @@ export async function backupRoutes(app: FastifyInstance) {
     const snapshot = await deleteBackupSnapshot(request.user.shopId, id);
     if (!snapshot) return reply.code(404).send({ message: 'Backup not found' });
     return { ok: true };
+  });
+
+  app.delete('/data', { preHandler: requireRole(['admin']) }, async (request, reply) => {
+    const { adminPin } = z.object({ adminPin: z.string().min(6) }).parse(request.body);
+
+    const admin = await prisma.user.findFirst({
+      where: { shopId: request.user.shopId, id: request.user.sub, role: { in: ['admin', 'Admin'] }, isActive: true },
+    });
+    if (!admin || admin.pin !== adminPin) {
+      return reply.code(403).send({ message: 'PIN ไม่ถูกต้อง' });
+    }
+
+    const result = await clearAllShopData(request.user.shopId, request.user.sub);
+    return { ok: true, ...result };
   });
 }

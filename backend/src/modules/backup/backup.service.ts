@@ -268,6 +268,37 @@ export async function restoreBackupSnapshot(shopId: string, id: string) {
   return snapshot;
 }
 
+export async function clearAllShopData(shopId: string, actingUserId: string) {
+  return prisma.$transaction(async (tx) => {
+    const sales = await tx.sale.findMany({ where: { shopId }, select: { id: true } });
+    const saleIds = sales.map((s) => s.id);
+
+    await tx.discountLog.deleteMany({ where: { saleId: { in: saleIds } } });
+    await tx.payment.deleteMany({ where: { saleId: { in: saleIds } } });
+    await tx.saleItem.deleteMany({ where: { saleId: { in: saleIds } } });
+    const salesDeleted = await tx.sale.deleteMany({ where: { shopId } });
+
+    await tx.parkedBill.deleteMany({ where: { shopId } });
+    await tx.syncLog.deleteMany({ where: { shopId } });
+    await tx.product.deleteMany({ where: { shopId } });
+    await tx.category.deleteMany({ where: { shopId } });
+
+    await tx.activityLog.create({
+      data: {
+        id: crypto.randomUUID(),
+        shopId,
+        userId: actingUserId,
+        action: 'CLEAR_ALL_DATA',
+        entityType: 'shop',
+        entityId: shopId,
+        detail: `ล้างข้อมูลทั้งหมด: ${salesDeleted.count} บิล + สินค้า/หมวดหมู่/parked bills/sync logs`,
+      },
+    });
+
+    return { salesDeleted: salesDeleted.count };
+  });
+}
+
 export function toBackupDto(snapshot: {
   id: string;
   fileName: string;
