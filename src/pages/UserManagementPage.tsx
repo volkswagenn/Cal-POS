@@ -10,6 +10,7 @@ import { useAuthStore } from '../stores/authStore';
 import type { Role, User } from '../types';
 import { useToast } from '../components/common/Toast';
 import { defaultPositions, parsePositions, permissionOptions, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
+import { requestSync } from '../services/api/syncScheduler';
 
 const ADMIN_ROLE = 'Admin';
 
@@ -144,6 +145,7 @@ export function UserManagementPage() {
     }
     setShowUserModal(false);
     reload();
+    requestSync({ immediate: true });
   };
 
   const handleToggleActive = async (user: User) => {
@@ -153,6 +155,7 @@ export function UserManagementPage() {
     }
     await UserRepository.setActive(user.id, !user.isActive);
     reload();
+    requestSync({ immediate: true });
   };
 
   const handleDeleteUser = async (user: User) => {
@@ -163,6 +166,7 @@ export function UserManagementPage() {
     }
     await UserRepository.deleteUser(user.id);
     reload();
+    requestSync({ immediate: true });
     setConfirmDeleteUser(null);
     toast('ลบผู้ใช้แล้ว', 'success');
   };
@@ -197,10 +201,11 @@ export function UserManagementPage() {
   };
 
   const savePositions = async () => {
-    await SettingsRepository.setSetting(positionSettingKey, JSON.stringify(positionDrafts));
+    await SettingsRepository.setSetting(positionSettingKey, JSON.stringify(positionDrafts), { sync: true });
     window.dispatchEvent(new Event('calpos:permissions-updated'));
     toast('บันทึกตำแหน่งและสิทธิ์แล้ว', 'success');
     reloadPositionSetting();
+    requestSync({ immediate: true });
   };
 
   const isRoleChangeLocked = editingUser?.role === ADMIN_ROLE && activeAdminCount <= 1;

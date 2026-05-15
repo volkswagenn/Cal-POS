@@ -7,6 +7,7 @@ import { saleDetailSchema } from '../sales/sales.routes.js';
 import { toSaleDetailDto } from '../sales/sales.dto.js';
 import { upsertSaleDetail } from '../sales/sales.service.js';
 import { wsManager } from './ws.manager.js';
+import { hashPassword } from '../../utils/password.js';
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes tolerance
 
@@ -46,6 +47,27 @@ const productPayloadSchema = z.object({
   isActive: z.boolean(),
   isOpenPrice: z.boolean(),
   createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
+const userPayloadSchema = z.object({
+  id: z.string().min(1),
+  username: z.string().min(1),
+  displayName: z.string().min(1),
+  pin: z.string().min(6).max(8).regex(/^\d+$/),
+  passwordHash: z.string().min(1).optional(),
+  passwordPlain: z.string().min(1).optional(),
+  role: z.string().min(1),
+  isActive: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).refine((value) => Boolean(value.passwordHash || value.passwordPlain), {
+  message: 'passwordHash or passwordPlain is required',
+});
+
+const settingPayloadSchema = z.object({
+  key: z.string().min(1),
+  value: z.string(),
   updatedAt: z.string().datetime(),
 });
 
@@ -148,6 +170,105 @@ async function pushProduct(shopId: string, change: z.infer<typeof pushSchema>['c
   });
 }
 
+async function pushUser(shopId: string, change: z.infer<typeof pushSchema>['changes'][number]) {
+  if (change.action === 'delete') {
+    await prisma.user.deleteMany({ where: { id: change.recordId, shopId } });
+    return;
+  }
+
+  const payload = userPayloadSchema.parse(change.payload);
+  const existing = await prisma.user.findFirst({ where: { id: payload.id, shopId } });
+  if (!existing && await wasDeleted(shopId, 'users', payload.id)) return;
+
+  const effectiveUpdatedAt = clampUpdatedAt(payload.updatedAt);
+  if (existing && existing.updatedAt > effectiveUpdatedAt) return;
+
+  const passwordHash = payload.passwordHash ?? await hashPassword(payload.passwordPlain ?? '');
+
+  await prisma.user.upsert({
+    where: { id: payload.id },
+    update: {
+      username: payload.username.trim(),
+      displayName: payload.displayName.trim(),
+      pin: payload.pin.trim(),
+      passwordHash,
+      role: payload.role,
+      isActive: payload.isActive,
+      updatedAt: effectiveUpdatedAt,
+    },
+    create: {
+      id: payload.id,
+      shopId,
+      username: payload.username.trim(),
+      displayName: payload.displayName.trim(),
+      pin: payload.pin.trim(),
+      passwordHash,
+      role: payload.role,
+      isActive: payload.isActive,
+      createdAt: new Date(payload.createdAt),
+      updatedAt: effectiveUpdatedAt,
+    },
+  });
+}
+
+async function pushSetting(shopId: string, change: z.infer<typeof pushSchema>['changes'][number]) {
+  if (change.action === 'delete') {
+    await prisma.appSetting.deleteMany({ where: { shopId, key: change.recordId } });
+    return;
+  }
+
+  const payload = settingPayloadSchema.parse(change.payload);
+  const existing = await prisma.appSetting.findUnique({
+    where: { shopId_key: { shopId, key: payload.key } },
+  });
+  const effectiveUpdatedAt = clampUpdatedAt(payload.updatedAt);
+  if (existing && existing.updatedAt > effectiveUpdatedAt) return;
+
+  await prisma.appSetting.upsert({
+    where: { shopId_key: { shopId, key: payload.key } },
+    update: { value: payload.value, updatedAt: effectiveUpdatedAt },
+    create: { shopId, key: payload.key, value: payload.value, updatedAt: effectiveUpdatedAt },
+  });
+}
+
+function toUserSyncDto(user: {
+  id: string;
+  shopId: string;
+  username: string;
+  displayName: string;
+  pin: string;
+  passwordHash: string;
+  role: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: user.id,
+    shopId: user.shopId,
+    username: user.username,
+    displayName: user.displayName,
+    pin: user.pin,
+    passwordHash: user.passwordHash,
+    role: user.role,
+    isActive: user.isActive,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
+}
+
+function toSettingSyncDto(setting: {
+  key: string;
+  value: string;
+  updatedAt: Date;
+}) {
+  return {
+    key: setting.key,
+    value: setting.value,
+    updatedAt: setting.updatedAt.toISOString(),
+  };
+}
+
 export async function syncRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
@@ -158,7 +279,11 @@ export async function syncRoutes(app: FastifyInstance) {
 
     for (const change of input.changes) {
       try {
-        if (change.tableName === 'categories') {
+        if (change.tableName === 'users') {
+          await pushUser(request.user.shopId, change);
+        } else if (change.tableName === 'settings') {
+          await pushSetting(request.user.shopId, change);
+        } else if (change.tableName === 'categories') {
           await pushCategory(request.user.shopId, change);
         } else if (change.tableName === 'products') {
           await pushProduct(request.user.shopId, change);
@@ -212,7 +337,19 @@ export async function syncRoutes(app: FastifyInstance) {
     }).parse(request.query);
     const since = query.since ? new Date(query.since) : new Date(0);
 
-    const [categories, products, sales, syncLogs] = await Promise.all([
+    const [users, settings, categories, products, sales, syncLogs] = await Promise.all([
+      prisma.user.findMany({
+        where: { shopId: request.user.shopId, updatedAt: { gt: since } },
+        orderBy: { updatedAt: 'asc' },
+      }),
+      prisma.appSetting.findMany({
+        where: {
+          shopId: request.user.shopId,
+          key: { in: ['userPositions'] },
+          updatedAt: { gt: since },
+        },
+        orderBy: { updatedAt: 'asc' },
+      }),
       // Strict `gt`: rows already delivered (updatedAt == cursor) are not
       // replayed every poll. The cursor below tracks real data, not wall clock,
       // so nothing is skipped either.
@@ -240,6 +377,8 @@ export async function syncRoutes(app: FastifyInstance) {
     // past data it hasn't seen.
     const timestamps: number[] = [
       ...categories.map((c) => c.updatedAt.getTime()),
+      ...users.map((u) => u.updatedAt.getTime()),
+      ...settings.map((s) => s.updatedAt.getTime()),
       ...products.map((p) => p.updatedAt.getTime()),
       ...sales.map((s) => s.updatedAt.getTime()),
       ...syncLogs.map((l) => l.syncedAt.getTime()),
@@ -251,6 +390,8 @@ export async function syncRoutes(app: FastifyInstance) {
     return {
       syncedAt: nextCursor,
       changes: {
+        users: users.map(toUserSyncDto),
+        settings: settings.map(toSettingSyncDto),
         categories: categories.map(toCategoryDto),
         products: products.map(toProductDto),
         sales: sales.map(toSaleDetailDto),

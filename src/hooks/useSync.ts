@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { hasApiBaseUrl } from '../services/api/client';
 import { SyncWebSocket } from '../services/api/syncWebSocket';
 import { SyncQueueRepository } from '../db/syncQueue';
+import { UserRepository } from '../db/repositories/UserRepository';
+import { SettingsRepository } from '../db/repositories/SettingsRepository';
+import { positionSettingKey } from '../utils/permissions';
 import {
   cancelScheduledSync,
   requestSync,
@@ -60,6 +63,8 @@ export function useSync(): SyncState {
 
     // Recover items stuck in 'syncing' from a previous crash/refresh.
     void SyncQueueRepository.resetStuckSyncing();
+    void UserRepository.backfillUsersForSync();
+    void SettingsRepository.backfillSettingsForSync([positionSettingKey]);
 
     const wsClient = new SyncWebSocket({ onChanges: () => requestSync() });
 

@@ -1,7 +1,7 @@
 import { db } from '../../db/database';
 import { SyncQueueRepository } from '../../db/syncQueue';
 import { nowIso } from '../../utils/date';
-import type { Category, Product, SaleDetail, SyncQueueItem } from '../../types';
+import type { AppSetting, Category, Product, SaleDetail, SyncQueueItem, User } from '../../types';
 import { apiRequest, hasApiBaseUrl } from './client';
 
 const LAST_SYNC_KEY = 'calpos_last_sync_at';
@@ -10,6 +10,8 @@ const DEVICE_ID_KEY = 'calpos_device_id';
 type SyncPullResponse = {
   syncedAt: string;
   changes: {
+    users: User[];
+    settings: AppSetting[];
     categories: Category[];
     products: Product[];
     sales: SaleDetail[];
@@ -69,6 +71,12 @@ async function detectConflictsAndCleanQueue(
     }
   };
 
+  for (const user of response.changes.users) {
+    checkRecord(user.id, `ผู้ใช้ "${user.displayName}"`, user.updatedAt);
+  }
+  for (const setting of response.changes.settings) {
+    checkRecord(setting.key, setting.key === 'userPositions' ? 'ตำแหน่ง/สิทธิ์ผู้ใช้' : `ตั้งค่า "${setting.key}"`, setting.updatedAt);
+  }
   for (const cat of response.changes.categories) {
     checkRecord(cat.id, `หมวดหมู่ "${cat.name}"`, cat.updatedAt);
   }
@@ -95,8 +103,8 @@ function isNewer(incomingUpdatedAt: string | undefined, localUpdatedAt: string |
 }
 
 async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
-  const { categories, products, sales, deletes } = response.changes;
-  if (!categories.length && !products.length && !sales.length && !deletes.length) {
+  const { users, settings, categories, products, sales, deletes } = response.changes;
+  if (!users.length && !settings.length && !categories.length && !products.length && !sales.length && !deletes.length) {
     return false;
   }
 
@@ -104,8 +112,37 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
 
   await db.transaction(
     'rw',
-    [db.categories, db.products, db.sales, db.sale_items, db.payments, db.discount_logs],
+    [db.users, db.settings, db.categories, db.products, db.sales, db.sale_items, db.payments, db.discount_logs],
     async () => {
+      if (users.length) {
+        const existing = new Map(
+          (await db.users.bulkGet(users.map((u) => u.id)))
+            .filter(Boolean)
+            .map((u) => [u!.id, u!.updatedAt]),
+        );
+        const fresh = users.filter((u) => isNewer(u.updatedAt, existing.get(u.id)));
+        if (fresh.length) {
+          await db.users.bulkPut(fresh);
+          mutated = true;
+        }
+      }
+
+      if (settings.length) {
+        const existing = new Map(
+          (await db.settings.bulkGet(settings.map((s) => s.key)))
+            .filter(Boolean)
+            .map((s) => [s!.key, s!.updatedAt]),
+        );
+        const fresh = settings.filter((s) => isNewer(s.updatedAt, existing.get(s.key)));
+        if (fresh.length) {
+          await db.settings.bulkPut(fresh);
+          mutated = true;
+          if (fresh.some((setting) => setting.key === 'userPositions')) {
+            window.dispatchEvent(new Event('calpos:permissions-updated'));
+          }
+        }
+      }
+
       if (categories.length) {
         const existing = new Map(
           (await db.categories.bulkGet(categories.map((c) => c.id)))
@@ -143,6 +180,8 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
       }
 
       for (const item of deletes) {
+        if (item.tableName === 'users') await db.users.delete(item.recordId);
+        if (item.tableName === 'settings') await db.settings.delete(item.recordId);
         if (item.tableName === 'categories') await db.categories.delete(item.recordId);
         if (item.tableName === 'products') await db.products.delete(item.recordId);
         if (item.tableName === 'sales') {

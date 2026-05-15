@@ -2,8 +2,10 @@ import { db } from '../database';
 import type { Role, User } from '../../types';
 import { nowIso } from '../../utils/date';
 import { sha256, uid } from '../../utils/id';
+import { SyncQueueRepository } from '../syncQueue';
 
 export const ADMIN_RESET_PIN = '000000';
+const USER_SYNC_BACKFILL_KEY = 'usersSyncBackfillV1';
 
 function normalizeUniqueValue(value: string) {
   return value.trim().toLowerCase();
@@ -23,6 +25,16 @@ export const UserRepository = {
   },
   async getUsers() {
     return db.users.orderBy('username').toArray();
+  },
+  async backfillUsersForSync() {
+    if (await db.settings.get(USER_SYNC_BACKFILL_KEY)) return 0;
+    const users = await db.users.toArray();
+    const usersToSync = users.filter((user) => user.username.trim().toLowerCase() !== 'admin');
+    for (const user of usersToSync) {
+      await SyncQueueRepository.enqueue({ tableName: 'users', recordId: user.id, action: 'upsert', payload: user });
+    }
+    await db.settings.put({ key: USER_SYNC_BACKFILL_KEY, value: 'true', updatedAt: nowIso() });
+    return usersToSync.length;
   },
   async assertUniqueUserFields(input: { username: string; displayName: string; pin: string }, excludeUserId?: string) {
     const users = await db.users.toArray();
@@ -55,6 +67,7 @@ export const UserRepository = {
       updatedAt: timestamp,
     };
     await db.users.add(user);
+    await SyncQueueRepository.enqueue({ tableName: 'users', recordId: user.id, action: 'upsert', payload: user });
     return user;
   },
   async updateUser(id: string, patch: Partial<Omit<User, 'id' | 'createdAt' | 'passwordHash'>> & { password?: string }) {
@@ -72,15 +85,22 @@ export const UserRepository = {
       ...(password ? { passwordHash: await sha256(password), passwordPlain: password } : {}),
       updatedAt: nowIso(),
     });
+    const user = await db.users.get(id);
+    if (user) await SyncQueueRepository.enqueue({ tableName: 'users', recordId: id, action: 'upsert', payload: user });
   },
   async deleteUser(id: string) {
     await db.users.delete(id);
+    await SyncQueueRepository.enqueue({ tableName: 'users', recordId: id, action: 'delete', payload: { id } });
   },
   async setActive(id: string, isActive: boolean) {
     await db.users.update(id, { isActive, updatedAt: nowIso() });
+    const user = await db.users.get(id);
+    if (user) await SyncQueueRepository.enqueue({ tableName: 'users', recordId: id, action: 'upsert', payload: user });
   },
   async deactivateUser(id: string) {
     await db.users.update(id, { isActive: false, updatedAt: nowIso() });
+    const user = await db.users.get(id);
+    if (user) await SyncQueueRepository.enqueue({ tableName: 'users', recordId: id, action: 'upsert', payload: user });
   },
   async resetAdminToDefault() {
     const timestamp = nowIso();

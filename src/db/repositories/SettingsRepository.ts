@@ -1,6 +1,7 @@
 import { db } from '../database';
 import { nowIso } from '../../utils/date';
 import type { ActivityLog, AppSetting, CashDrawerLog, Category, DiscountLog, ParkedBill, Payment, Product, Sale, SaleItem, User, ExternalReportExport, ExternalReportImport, ExternalReportRow } from '../../types';
+import { SyncQueueRepository } from '../syncQueue';
 
 interface BackupData {
   users: User[];
@@ -26,8 +27,26 @@ export const SettingsRepository = {
   async getAll() {
     return db.settings.toArray();
   },
-  async setSetting(key: string, value: string) {
-    await db.settings.put({ key, value, updatedAt: nowIso() });
+  async setSetting(key: string, value: string, options: { sync?: boolean } = {}) {
+    const setting = { key, value, updatedAt: nowIso() };
+    await db.settings.put(setting);
+    if (options.sync) {
+      await SyncQueueRepository.enqueue({ tableName: 'settings', recordId: key, action: 'upsert', payload: setting });
+    }
+  },
+  async backfillSettingsForSync(keys: string[]) {
+    let count = 0;
+    for (const key of keys) {
+      const backfillKey = `settingsSyncBackfill:${key}`;
+      if (await db.settings.get(backfillKey)) continue;
+      const setting = await db.settings.get(key);
+      if (setting) {
+        await SyncQueueRepository.enqueue({ tableName: 'settings', recordId: key, action: 'upsert', payload: setting });
+        count += 1;
+      }
+      await db.settings.put({ key: backfillKey, value: 'true', updatedAt: nowIso() });
+    }
+    return count;
   },
   async exportAllData(): Promise<BackupData> {
     const [users, categories, products, sales, saleItems, payments, discounts, logs, settings, parkedBills, externalExports, externalImports, externalRows, drawerLogs] = await Promise.all([
