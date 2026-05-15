@@ -6,12 +6,35 @@ import { uid } from '../../utils/id';
 import { SettingsRepository } from './SettingsRepository';
 import { SyncQueueRepository } from '../syncQueue';
 
+const DEVICE_CODE_KEY = 'calpos_device_code';
+const DEVICE_ID_KEY = 'calpos_device_id';
+
+// Short, stable, human-readable code (e.g. "A3F2") per device.
+// Stored in localStorage so bills generated on this device always carry the same tag.
+function getDeviceCode() {
+  const existing = localStorage.getItem(DEVICE_CODE_KEY);
+  if (existing) return existing;
+
+  // Derive from existing deviceId if available, otherwise generate fresh
+  const deviceId =
+    localStorage.getItem(DEVICE_ID_KEY) ||
+    (crypto.randomUUID ? crypto.randomUUID() : `device-${Date.now()}`);
+  const hex = deviceId.replace(/[^a-f0-9]/gi, '').slice(0, 4).toUpperCase().padEnd(4, '0');
+  localStorage.setItem(DEVICE_CODE_KEY, hex);
+  return hex;
+}
+
 async function nextBillNo() {
   const today = new Date();
   const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const deviceCode = getDeviceCode();
   const resetRule = await SettingsRepository.getSetting('billNumberResetRule', 'daily');
+
+  // Only count bills generated on THIS device, so each device keeps its own sequence
+  // and no two devices ever produce the same billNo.
   const all = await db.sales.toArray();
-  const scope = resetRule === 'daily' ? all.filter((sale) => sale.billNo.includes(datePart)) : all;
+  const sameDevice = all.filter((sale) => sale.billNo.startsWith(`${deviceCode}-`));
+  const scope = resetRule === 'daily' ? sameDevice.filter((sale) => sale.billNo.includes(datePart)) : sameDevice;
   const last = scope
     .map((sale) => {
       const parts = sale.billNo.split('-');
@@ -19,7 +42,7 @@ async function nextBillNo() {
     })
     .filter(Number.isFinite)
     .sort((a, b) => b - a)[0] ?? 0;
-  return `CALPOS-${datePart}-${String(last + 1).padStart(6, '0')}`;
+  return `${deviceCode}-${datePart}-${String(last + 1).padStart(6, '0')}`;
 }
 
 export const SaleRepository = {

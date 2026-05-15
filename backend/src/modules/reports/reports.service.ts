@@ -14,12 +14,24 @@ export type PreviewRow = {
   amount?: number;
 };
 
+// Asia/Bangkok = UTC+7 (no DST). All report aggregation is done in Bangkok local time
+// so dashboards reflect "เวลาขายจริง" instead of the Render server's UTC clock.
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 export function startOfDay(date: string) {
-  return new Date(`${date}T00:00:00`);
+  return new Date(`${date}T00:00:00+07:00`);
 }
 
 export function endOfDay(date: string) {
-  return new Date(`${date}T23:59:59.999`);
+  return new Date(`${date}T23:59:59.999+07:00`);
+}
+
+function bangkokHour(date: Date) {
+  return new Date(date.getTime() + BANGKOK_OFFSET_MS).getUTCHours();
+}
+
+function bangkokDateStr(date: Date) {
+  return new Date(date.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 function thDate(isoDate: string) {
@@ -52,7 +64,7 @@ export async function getDailyReport(shopId: string, date: string) {
   const products = new Map<string, { productName: string; quantity: number; revenue: number }>();
 
   completed.forEach((sale) => {
-    const hour = sale.createdAt.getHours();
+    const hour = bangkokHour(sale.createdAt);
     hourly[hour].total += Number(sale.total);
     hourly[hour].bills += 1;
 
@@ -201,7 +213,7 @@ export async function buildPreview(shopId: string, reportType: string, dateFrom:
   };
 
   sales.forEach((sale) => {
-    const date = sale.createdAt.toISOString().slice(0, 10);
+    const date = bangkokDateStr(sale.createdAt);
     const sign = sale.status === 'refunded' ? -1 : 1;
     sale.payments.forEach((payment) => add(date, methodGroup(payment.method), Number(payment.amount) * sign));
   });
