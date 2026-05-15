@@ -3,6 +3,7 @@ import type { AppSetting, Category, Product, User } from '../types';
 import { nowIso } from '../utils/date';
 import { sha256, uid } from '../utils/id';
 import { normalizeProductNameFields } from '../utils/productName';
+import { INT4_MAX, clampSortOrder } from '../utils/sortOrder';
 import { defaultPrinterSettings } from './repositories/PrinterRepository';
 import { SyncQueueRepository } from './syncQueue';
 
@@ -18,6 +19,10 @@ const categorySeeds = [
 
 const deletedDefaultCategorySettingKey = 'deletedDefaultCategoryIds';
 const productNumericAscSortSettingKey = 'productNumericAscSortV1';
+// One-time repair: products/categories created with a millisecond Date.now()
+// sortOrder overflow PostgreSQL INT4 and fail the sync push. Clamp them back
+// into range (preserving order) and re-push.
+const sortOrderInt4FixSettingKey = 'sortOrderInt4FixV1';
 
 function parseDeletedDefaultCategoryIds(value?: string) {
   try {
@@ -154,6 +159,10 @@ export async function seedDatabase() {
   // Track products whose names were fixed so we can enqueue them to SyncQueue after
   // the transaction (SyncQueueRepository writes to db.sync_queue which is not in this transaction).
   const nameFixedProductIds: string[] = [];
+  // Records whose oversized (ms-timestamp) sortOrder was clamped — re-pushed
+  // after the transaction so the corrected value reaches the cloud.
+  const sortFixedProductIds: string[] = [];
+  const sortFixedCategoryIds: string[] = [];
 
   await db.transaction('rw', [db.users, db.categories, db.products, db.settings, db.activity_logs], async () => {
     const deletedDefaultCategoryIds = parseDeletedDefaultCategoryIds((await db.settings.get(deletedDefaultCategorySettingKey))?.value);
@@ -211,6 +220,25 @@ export async function seedDatabase() {
       }
       await db.settings.put({ key: productNumericAscSortSettingKey, value: 'true', updatedAt: timestamp });
     }
+    // One-time INT4 sortOrder repair. Products/categories created with a
+    // millisecond Date.now() sortOrder (~1.7e12) overflow the server's INT4
+    // column and fail every sync push. Divide by 1000 to fit INT4 while
+    // keeping their relative order, then re-push (enqueue below).
+    if (!(await db.settings.get(sortOrderInt4FixSettingKey))) {
+      for (const product of await db.products.toArray()) {
+        if (product.sortOrder > INT4_MAX) {
+          await db.products.update(product.id, { sortOrder: clampSortOrder(product.sortOrder), updatedAt: timestamp });
+          sortFixedProductIds.push(product.id);
+        }
+      }
+      for (const category of await db.categories.toArray()) {
+        if (category.sortOrder > INT4_MAX) {
+          await db.categories.update(category.id, { sortOrder: clampSortOrder(category.sortOrder), updatedAt: timestamp });
+          sortFixedCategoryIds.push(category.id);
+        }
+      }
+      await db.settings.put({ key: sortOrderInt4FixSettingKey, value: 'true', updatedAt: timestamp });
+    }
     for (const setting of settings) {
       if (!(await db.settings.get(setting.key))) await db.settings.add(setting);
     }
@@ -232,6 +260,25 @@ export async function seedDatabase() {
   // which was not included in the transaction above.
   if (nameFixedProductIds.length > 0) {
     const fixedProducts = await db.products.bulkGet(nameFixedProductIds);
+    for (const product of fixedProducts) {
+      if (product) {
+        await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });
+      }
+    }
+  }
+
+  // Re-push records whose oversized sortOrder was clamped, so the previously
+  // failing INT4 push now succeeds with the corrected value.
+  if (sortFixedCategoryIds.length > 0) {
+    const fixedCategories = await db.categories.bulkGet(sortFixedCategoryIds);
+    for (const category of fixedCategories) {
+      if (category) {
+        await SyncQueueRepository.enqueue({ tableName: 'categories', recordId: category.id, action: 'upsert', payload: category });
+      }
+    }
+  }
+  if (sortFixedProductIds.length > 0) {
+    const fixedProducts = await db.products.bulkGet(sortFixedProductIds);
     for (const product of fixedProducts) {
       if (product) {
         await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });

@@ -3,6 +3,7 @@ import type { Product } from '../../types';
 import { nowIso } from '../../utils/date';
 import { uid } from '../../utils/id';
 import { normalizeProductNameFields } from '../../utils/productName';
+import { clampSortOrder, defaultSortOrder } from '../../utils/sortOrder';
 import { SyncQueueRepository } from '../syncQueue';
 
 // V2: refresh updatedAt to now so delayed items aren't missed by pull cursors
@@ -43,7 +44,7 @@ export const ProductRepository = {
       price: Number(input.price),
       categoryId: input.categoryId,
       color: input.color,
-      sortOrder: input.sortOrder ?? Date.now(),
+      sortOrder: clampSortOrder(input.sortOrder ?? defaultSortOrder()),
       isActive: input.isActive ?? true,
       isOpenPrice: input.isOpenPrice ?? false,
       createdAt: timestamp,

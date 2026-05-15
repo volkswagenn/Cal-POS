@@ -2,6 +2,7 @@ import { db } from '../database';
 import type { Category } from '../../types';
 import { nowIso } from '../../utils/date';
 import { uid } from '../../utils/id';
+import { clampSortOrder, defaultSortOrder } from '../../utils/sortOrder';
 import { SyncQueueRepository } from '../syncQueue';
 
 const DELETED_DEFAULT_CATEGORY_IDS = 'deletedDefaultCategoryIds';
@@ -33,7 +34,7 @@ export const CategoryRepository = {
       name: input.name,
       color: input.color,
       icon: input.icon,
-      sortOrder: input.sortOrder ?? Date.now(),
+      sortOrder: clampSortOrder(input.sortOrder ?? defaultSortOrder()),
       isActive: input.isActive ?? true,
       createdAt: timestamp,
       updatedAt: timestamp,
