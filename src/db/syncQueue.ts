@@ -33,7 +33,22 @@ export const SyncQueueRepository = {
       .anyOf(['pending', 'failed'])
       .limit(limit)
       .toArray();
-    return pending.filter((item) => item.attempts < 5);
+    return pending.filter((item) => item.attempts < 10);
+  },
+
+  async resetFailed() {
+    const failed = await db.sync_queue.where('status').equals('failed').toArray();
+    await Promise.all(
+      failed.map((item) =>
+        db.sync_queue.update(item.id, {
+          status: 'pending',
+          attempts: 0,
+          lastError: undefined,
+          updatedAt: nowIso(),
+        }),
+      ),
+    );
+    return failed.length;
   },
 
   async markSyncing(id: string) {

@@ -51,11 +51,43 @@ type SaleDetailInput = {
   }>;
 };
 
+async function resolveBillNo(shopId: string, saleId: string, requestedBillNo: string): Promise<string> {
+  const conflict = await prisma.sale.findFirst({
+    where: { shopId, billNo: requestedBillNo, NOT: { id: saleId } },
+    select: { id: true },
+  });
+  if (!conflict) return requestedBillNo;
+
+  // Collision: renumber to next available numeric billNo for this shop
+  const existing = await prisma.sale.findMany({
+    where: { shopId },
+    select: { billNo: true },
+  });
+  const maxNum = existing
+    .map((s) => parseInt(s.billNo, 10))
+    .filter((n) => Number.isFinite(n))
+    .reduce((max, n) => (n > max ? n : max), 0);
+
+  let candidate = maxNum + 1;
+  // Safety loop in case of races
+  while (
+    await prisma.sale.findFirst({
+      where: { shopId, billNo: String(candidate) },
+      select: { id: true },
+    })
+  ) {
+    candidate++;
+  }
+  return String(candidate);
+}
+
 export async function upsertSaleDetail(shopId: string, input: SaleDetailInput) {
+  const billNo = await resolveBillNo(shopId, input.sale.id, input.sale.billNo);
+
   await prisma.sale.upsert({
     where: { id: input.sale.id },
     update: {
-      billNo: input.sale.billNo,
+      billNo,
       cashierId: input.sale.cashierId,
       cashierName: input.sale.cashierName,
       subtotal: input.sale.subtotal,
@@ -70,7 +102,7 @@ export async function upsertSaleDetail(shopId: string, input: SaleDetailInput) {
     create: {
       id: input.sale.id,
       shopId,
-      billNo: input.sale.billNo,
+      billNo,
       cashierId: input.sale.cashierId,
       cashierName: input.sale.cashierName,
       subtotal: input.sale.subtotal,
