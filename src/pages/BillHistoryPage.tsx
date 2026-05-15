@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Eye, Printer, RotateCcw, Search, XCircle } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
@@ -17,6 +17,7 @@ import {
 } from '../services/receiptLayoutService';
 import { ReceiptCanvasPreview } from '../components/pos/ReceiptCanvasPreview';
 import { useAsync } from '../hooks/useAsync';
+import { subscribeSync } from '../services/api/syncScheduler';
 import { formatDateInput, formatDateTime } from '../utils/date';
 import { money } from '../utils/money';
 import type { SaleDetail } from '../types';
@@ -45,6 +46,16 @@ export function BillHistoryPage() {
   const toast = useToast();
   const { can } = usePermissions();
   const { data, reload, loading } = useAsync(() => SaleRepository.searchSales({ query, date, status }), [query, date, status]);
+
+  // Auto-reload when a sync completes so synced bills appear without a manual
+  // browser refresh. Read-only scheduler subscription — no sync logic change.
+  const lastSyncSig = useRef<string | null>(null);
+  useEffect(() => subscribeSync((s) => {
+    if (s.lastSyncedAt && s.lastSyncedAt !== lastSyncSig.current) {
+      lastSyncSig.current = s.lastSyncedAt;
+      void reload();
+    }
+  }), [reload]);
 
   useEffect(() => {
     if (!selected) return;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
@@ -6,13 +6,14 @@ import { LoadingOverlay } from '../components/common/LoadingOverlay';
 import { ReportRepository } from '../db/repositories/ReportRepository';
 import { useAsync } from '../hooks/useAsync';
 import { hasApiBaseUrl } from '../services/api/client';
+import { subscribeSync } from '../services/api/syncScheduler';
 import { reportsApi } from '../services/api/reportsApi';
 import { formatDateInput } from '../utils/date';
 import { money } from '../utils/money';
 
 export function DashboardPage() {
   const [date, setDate] = useState(formatDateInput());
-  const { data: daily, loading } = useAsync(async () => {
+  const { data: daily, loading, reload } = useAsync(async () => {
     if (hasApiBaseUrl && navigator.onLine) return reportsApi.daily(date);
 
     const [summary, hourly, products, payments, employees] = await Promise.all([
@@ -24,6 +25,19 @@ export function DashboardPage() {
     ]);
     return { summary, hourly, products, payments, employees };
   }, [date]);
+
+  // Reload the dashboard whenever a sync completes (WebSocket push, the
+  // "อัปเดตข้อมูลร้าน" button, etc.) so new sales appear without a manual
+  // browser refresh. Read-only subscription to the scheduler — does not
+  // change any sync behaviour.
+  const lastSyncSig = useRef<string | null>(null);
+  useEffect(() => subscribeSync((s) => {
+    if (s.lastSyncedAt && s.lastSyncedAt !== lastSyncSig.current) {
+      lastSyncSig.current = s.lastSyncedAt;
+      void reload();
+    }
+  }), [reload]);
+
   const summary = daily?.summary;
   const hourly = daily?.hourly;
   const products = daily?.products;
