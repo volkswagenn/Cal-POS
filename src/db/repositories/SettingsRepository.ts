@@ -34,19 +34,6 @@ export const SettingsRepository = {
       await SyncQueueRepository.enqueue({ tableName: 'settings', recordId: key, action: 'upsert', payload: setting });
     }
   },
-  /**
-   * Ensure a setting that already exists in IndexedDB has been pushed to the
-   * cloud at least once. Idempotent — guarded by settingsSyncBackfill flag.
-   *
-   * Only pushes when the key IS present locally (never overwrites cloud with
-   * stale defaults). Call this from pages that require elevated permission
-   * (e.g. UserManagementPage) so only authorised users trigger the push.
-   */
-  async ensureSettingSynced(key: string) {
-    const existing = await db.settings.get(key);
-    if (!existing) return; // nothing local to push — let sync pull decide
-    await this.backfillSettingsForSync([key]);
-  },
   async backfillSettingsForSync(keys: string[]) {
     let count = 0;
     for (const key of keys) {

@@ -69,18 +69,11 @@ export function UserManagementPage() {
     setPositionDrafts(savedPositions);
   }, [savedPositions]);
 
-  // เมื่อหน้านี้โหลด (คนที่มีสิทธิ์จัดการผู้ใช้) → ตรวจว่า userPositions
-  // เคยถูก push ขึ้น cloud แล้วหรือยัง ถ้ายัง → push ทันที (backfill once)
-  useEffect(() => {
-    SettingsRepository.ensureSettingSynced(positionSettingKey);
-  }, []);
-
   // เมื่อ device อื่น sync ตำแหน่งใหม่มา → reload UI ทันที
-  // (usePermissions ก็ฟัง event นี้อยู่แล้ว แต่ positionSetting ของหน้านี้แยกกัน)
   useEffect(() => {
     const onPositionsUpdated = () => {
       reloadPositionSetting();
-      reload(); // reload users ด้วยเพราะ role อาจเปลี่ยน
+      reload();
     };
     window.addEventListener('calpos:permissions-updated', onPositionsUpdated);
     return () => window.removeEventListener('calpos:permissions-updated', onPositionsUpdated);
