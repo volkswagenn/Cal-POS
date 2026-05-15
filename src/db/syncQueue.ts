@@ -2,6 +2,7 @@ import { db } from './database';
 import type { SyncQueueItem } from '../types';
 import { nowIso } from '../utils/date';
 import { uid } from '../utils/id';
+import { emitLocalChange } from '../services/api/syncSignal';
 
 // After this many failed attempts an item is moved to the 'dead' state instead
 // of being silently skipped. Dead items are surfaced to the user (banner) and
@@ -29,6 +30,9 @@ export const SyncQueueRepository = {
     };
 
     await db.sync_queue.add(item);
+    // Wake the sync scheduler so this change is pushed to the cloud now
+    // (debounced + single-flighted on the scheduler side).
+    emitLocalChange();
     return item;
   },
 

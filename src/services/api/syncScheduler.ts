@@ -1,4 +1,5 @@
 import { syncApi, type PullResult } from './syncApi';
+import { onLocalChange } from './syncSignal';
 
 /**
  * Module-level sync orchestrator.
@@ -132,6 +133,10 @@ export function requestSync(options: { full?: boolean; immediate?: boolean } = {
     void execute();
   }, DEBOUNCE_MS);
 }
+
+// Any local mutation (sale, product, category, ...) enqueues a sync item and
+// emits this signal — push it to the cloud right away (debounced).
+onLocalChange(() => requestSync());
 
 /** Cancel any pending debounced/backoff sync (used on teardown). */
 export function cancelScheduledSync() {

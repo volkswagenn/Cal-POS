@@ -7,13 +7,23 @@ import { SettingsRepository } from './SettingsRepository';
 import { SyncQueueRepository } from '../syncQueue';
 import { getDeviceCode } from '../../utils/deviceCode';
 
-// O(1) per sale: the running sequence is kept in the settings table keyed by
-// device + scope, instead of scanning the entire sales table on every checkout
-// (which degraded linearly as history grew). The full scan now runs at most
-// once — to seed the counter on upgrade — then never again.
+// billNo format: `<DEVICE>-<BE2><00><SEQ4>`  e.g.  POS1-69000001
+//   DEVICE = device code (POS1)
+//   BE2    = พ.ศ. 2 หลักท้าย (2569 -> "69")
+//   00     = ตัวคั่นคงที่
+//   SEQ4   = เลขรัน 4 หลัก (เริ่ม 0001 ใหม่ทุกวันถ้าตั้ง "รีเซ็ตทุกวัน")
+
+// Trailing running number = last 4 digits of the final segment. Works for the
+// new format ("69000001" -> 1) and legacy 6-digit bills ("000001" -> 1) when
+// seeding the continuous counter on upgrade.
 function seqFromBillNo(billNo: string) {
-  const n = Number(billNo.split('-').pop());
+  const tail = (billNo.split('-').pop() ?? '').slice(-4);
+  const n = Number(tail);
   return Number.isFinite(n) ? n : 0;
+}
+
+function buddhistYear2() {
+  return String((new Date().getFullYear() + 543) % 100).padStart(2, '0');
 }
 
 async function nextBillNo() {
@@ -28,13 +38,18 @@ async function nextBillNo() {
     let current = raw != null ? Number(raw) : NaN;
 
     if (!Number.isFinite(current)) {
-      // One-time seed: derive the starting point from any existing local bills
-      // for this device/scope so we never reuse a number after an upgrade.
-      const all = await db.sales.toArray();
-      current = all
-        .filter((s) => s.billNo.startsWith(`${deviceCode}-`))
-        .filter((s) => (resetRule === 'daily' ? s.billNo.includes(datePart) : true))
-        .reduce((max, s) => Math.max(max, seqFromBillNo(s.billNo)), 0);
+      if (resetRule === 'daily') {
+        // Daily reset: counter is date-keyed and persisted, so a fresh day
+        // simply starts at 1. No scan needed.
+        current = 0;
+      } else {
+        // Continuous: one-time seed from existing same-device bills so we
+        // never reuse a number after an upgrade.
+        const all = await db.sales.toArray();
+        current = all
+          .filter((s) => s.billNo.startsWith(`${deviceCode}-`))
+          .reduce((max, s) => Math.max(max, seqFromBillNo(s.billNo)), 0);
+      }
     }
 
     const next = current + 1;
@@ -42,7 +57,7 @@ async function nextBillNo() {
     return next;
   });
 
-  return `${deviceCode}-${datePart}-${String(value).padStart(6, '0')}`;
+  return `${deviceCode}-${buddhistYear2()}00${String(value).padStart(4, '0')}`;
 }
 
 export const SaleRepository = {
