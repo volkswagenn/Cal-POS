@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Boxes, ClipboardList, DatabaseBackup, History, LayoutDashboard, LogOut, Menu, Printer, Send, Settings, Store, Users, Warehouse } from 'lucide-react';
+import { AlertTriangle, Boxes, ClipboardList, DatabaseBackup, History, LayoutDashboard, LogOut, Menu, Printer, Send, Settings, Store, Users, Warehouse } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { usePermissions } from '../hooks/usePermissions';
@@ -46,7 +46,7 @@ export function AppLayout() {
   const lastBurgerClick = useRef(0);
   const user = useAuthStore((state) => state.user)!;
   const logout = useAuthStore((state) => state.logout);
-  const { can } = usePermissions();
+  const { can, loading: permissionsLoading, isRoleOrphan } = usePermissions();
   const navigate = useNavigate();
   const printerStatus = usePrinterLiveStatus();
   const { data: lastBackupAt } = useAsync(() => SettingsRepository.getSetting('lastBackupAt'), []);
@@ -88,7 +88,17 @@ export function AppLayout() {
         <nav className="flex-1 space-y-1 overflow-auto p-3">
           {links.map(({ to, label, icon: Icon, permission, disabled }) => {
             const isAllowed = can(permission) && !disabled;
-            if (!isAllowed) return <DisabledNavItem key={`${to}-${permission}`} label={label} icon={Icon} />;
+            if (!isAllowed) {
+              // ขณะโหลด permissions อยู่ → แสดง skeleton แทน disabled
+              if (permissionsLoading) {
+                return (
+                  <button key={`${to}-${permission}`} type="button" disabled className="flex w-full animate-pulse cursor-default items-center gap-3 rounded-md px-4 py-3 font-semibold text-slate-200">
+                    <Icon size={20} /> {label}
+                  </button>
+                );
+              }
+              return <DisabledNavItem key={`${to}-${permission}`} label={label} icon={Icon} />;
+            }
             return (
               <NavLink key={`${to}-${permission}`} to={to} onClick={() => { if (!pinned) setOpen(false); }} className={({ isActive }) => `flex items-center gap-3 rounded-md px-4 py-3 font-semibold ${isActive ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-100'}`}>
                 <Icon size={20} /> {label}
@@ -190,6 +200,21 @@ export function AppLayout() {
             </button>
           </div>
         )}
+        {isRoleOrphan && (
+          <div className="flex items-center gap-3 bg-red-600 px-4 py-2 text-sm font-bold text-white">
+            <AlertTriangle size={16} className="shrink-0" />
+            <span>
+              ตำแหน่ง <strong>&ldquo;{user.role}&rdquo;</strong> ไม่มีในระบบนี้ —
+              กำลังดึงข้อมูลสิทธิ์จาก Cloud กรุณารอสักครู่ หรือ{' '}
+              <button
+                className="underline hover:no-underline"
+                onClick={() => window.location.reload()}
+              >
+                รีเฟรชหน้า
+              </button>
+            </span>
+          </div>
+        )}
         <Outlet />
       </main>
 
@@ -199,6 +224,10 @@ export function AppLayout() {
             <NavLink key={`${to}-${permission}`} to={to} className={({ isActive }) => `flex min-h-14 flex-col items-center justify-center gap-1 py-1 text-[11px] font-semibold ${isActive ? 'text-primary-700' : 'text-slate-500'}`}>
               <Icon size={21} /> {label}
             </NavLink>
+          ) : permissionsLoading ? (
+            <button key={`${to}-${permission}`} type="button" disabled className="flex min-h-14 flex-col items-center justify-center gap-1 py-1 text-[11px] font-semibold text-slate-300 animate-pulse">
+              <Icon size={21} /> {label}
+            </button>
           ) : (
             <DisabledNavItem key={`${to}-${permission}`} label={label} icon={Icon} compact />
           )
@@ -207,6 +236,10 @@ export function AppLayout() {
           <NavLink to="/dashboard" className={({ isActive }) => `flex min-h-14 flex-col items-center justify-center gap-1 py-1 text-[11px] font-semibold ${isActive ? 'text-primary-700' : 'text-slate-500'}`}>
             <Menu size={21} /> เมนู
           </NavLink>
+        ) : permissionsLoading ? (
+          <button type="button" disabled className="flex min-h-14 flex-col items-center justify-center gap-1 py-1 text-[11px] font-semibold text-slate-300 animate-pulse">
+            <Menu size={21} /> เมนู
+          </button>
         ) : (
           <DisabledNavItem label="เมนู" icon={Menu} compact />
         )}

@@ -6,20 +6,44 @@ import { useAsync } from './useAsync';
 
 export function usePermissions() {
   const user = useAuthStore((state) => state.user);
-  const { data: positionSetting, reload } = useAsync(() => SettingsRepository.getSetting(positionSettingKey, JSON.stringify(defaultPositions)), []);
+  const { data: positionSetting, loading, reload } = useAsync(
+    () => SettingsRepository.getSetting(positionSettingKey, JSON.stringify(defaultPositions)),
+    [],
+  );
   const positions = useMemo(() => parsePositions(positionSetting), [positionSetting]);
   const permissions = useMemo(() => permissionsForRole(user?.role, positions), [user?.role, positions]);
 
+  // Role ไม่ตรงกับ position ใดเลย (sync ยังไม่มา หรือ role ถูกลบ)
+  const isRoleOrphan =
+    !loading &&
+    !!user?.role &&
+    positions.length > 0 &&
+    !positions.some((p) => p.name === user.role);
+
   useEffect(() => {
+    // sync ดึง userPositions ใหม่มา → reload ทันที
     const onUpdated = () => reload();
     window.addEventListener('calpos:permissions-updated', onUpdated);
     return () => window.removeEventListener('calpos:permissions-updated', onUpdated);
+  }, [reload]);
+
+  useEffect(() => {
+    // กลับมา online → sync อาจยังไม่ได้ดึง positions → reload
+    const onOnline = () => reload();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
   }, [reload]);
 
   return {
     user,
     positions,
     permissions,
-    can: (permission: PermissionKey) => hasPermission(user?.role, positions, permission),
+    loading,
+    isRoleOrphan,
+    can: (permission: PermissionKey) => {
+      // ขณะโหลดอยู่ → อย่าบล็อก (แสดงชั่วคราว แล้วค่อย update หลัง async เสร็จ)
+      if (loading) return true;
+      return hasPermission(user?.role, positions, permission);
+    },
   };
 }
