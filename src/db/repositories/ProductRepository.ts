@@ -72,6 +72,21 @@ export const ProductRepository = {
       .filter((product): product is Product => Boolean(product))
       .map((product) => SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product })));
   },
+  // Reorder products within a single category without affecting other categories' sort positions.
+  // Uses the same category-offset scheme as reorderProductsByNameAscWithinCategories so sortOrder
+  // values from different categories never collide.
+  async reorderProductsInCategory(categoryId: string, ids: string[]) {
+    const category = await db.categories.get(categoryId);
+    const categoryOffset = category ? (category.sortOrder + 1) * 100_000 : 0;
+    const timestamp = nowIso();
+    await db.transaction('rw', db.products, async () => {
+      await Promise.all(ids.map((id, index) => db.products.update(id, { sortOrder: categoryOffset + index + 1, updatedAt: timestamp })));
+    });
+    const products = await db.products.bulkGet(ids);
+    await Promise.all(products
+      .filter((product): product is Product => Boolean(product))
+      .map((product) => SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product })));
+  },
   async reorderProductsByNameAscWithinCategories() {
     const timestamp = nowIso();
     const products = await db.products.toArray();

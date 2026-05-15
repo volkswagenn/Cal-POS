@@ -419,7 +419,13 @@ export function ProductManagementPage() {
   const saveManualOrder = async () => {
     if (!canManageCatalog) return toast('ไม่มีสิทธิ์จัดเรียงสินค้า', 'error');
     if (!hasSortingDraft) return;
-    await ProductRepository.reorderProducts(draftOrder.map((product) => product.id));
+    const ids = draftOrder.map((product) => product.id);
+    if (sortingCategory !== 'all') {
+      // Scoped reorder: only affects products in this category, other categories are untouched
+      await ProductRepository.reorderProductsInCategory(sortingCategory, ids);
+    } else {
+      await ProductRepository.reorderProducts(ids);
+    }
     toast('บันทึกการแก้ไขลำดับสินค้าแล้ว หน้าขายจะใช้ลำดับนี้ทันที', 'success');
     reloadProducts();
   };
