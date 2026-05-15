@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Product, SaleDetail, SaleStatus } from '../types';
 import type { CashDrawerAction } from '../types';
 import { CategoryRepository } from '../db/repositories/CategoryRepository';
@@ -54,8 +54,8 @@ function toFontPx(value: string | null | undefined) {
 }
 
 export function PosPage() {
-  const { data: categories } = useAsync(() => CategoryRepository.getCategories(), []);
-  const { data: products } = useAsync(() => ProductRepository.getProducts(), []);
+  const { data: categories, reload: reloadCategories } = useAsync(() => CategoryRepository.getCategories(), []);
+  const { data: products, reload: reloadProducts } = useAsync(() => ProductRepository.getProducts(), []);
   const { data: productButtonSize } = useAsync(() => SettingsRepository.getSetting('productButtonSize', 'medium'), []);
   const { data: displayFontSize } = useAsync(() => SettingsRepository.getSetting('productButtonDisplayFontSize', 'medium'), []);
   const { data: nameFontSize } = useAsync(() => SettingsRepository.getSetting('productButtonNameFontSize', 'medium'), []);
@@ -95,6 +95,13 @@ export function PosPage() {
   const cart = useCartStore();
   const user = useAuthStore((state) => state.user)!;
   const toast = useToast();
+
+  // รับข้อมูลสินค้า/หมวดหมู่ใหม่จาก device อื่นทันทีเมื่อ sync ดึงมา
+  useEffect(() => {
+    const onCatalogUpdated = () => { reloadCategories(); reloadProducts(); };
+    window.addEventListener('calpos:catalog-updated', onCatalogUpdated);
+    return () => window.removeEventListener('calpos:catalog-updated', onCatalogUpdated);
+  }, [reloadCategories, reloadProducts]);
   const { data: historyBills, reload: reloadHistory } = useAsync(
     () => SaleRepository.searchSales({ query: historyQuery, date: historyDate, status: historyStatus }),
     [historyQuery, historyDate, historyStatus],

@@ -144,6 +144,13 @@ export function ProductManagementPage() {
     .map((_, index) => index + 1)
     .slice(Math.max(0, productPage - 3), Math.min(productTotalPages, productPage + 2));
 
+  // รับสินค้า/หมวดหมู่ใหม่จาก device อื่นทันทีเมื่อ sync ดึงมา
+  useEffect(() => {
+    const onCatalogUpdated = () => { reloadProducts(); reloadCategories(); };
+    window.addEventListener('calpos:catalog-updated', onCatalogUpdated);
+    return () => window.removeEventListener('calpos:catalog-updated', onCatalogUpdated);
+  }, [reloadProducts, reloadCategories]);
+
   useEffect(() => {
     setProductPage(1);
   }, [query, categoryFilter, statusFilter, sortBy, productPageSize]);

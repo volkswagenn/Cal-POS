@@ -109,6 +109,7 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
   }
 
   let mutated = false;
+  let catalogChanged = false;
 
   await db.transaction(
     'rw',
@@ -153,6 +154,7 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
         if (fresh.length) {
           await db.categories.bulkPut(fresh);
           mutated = true;
+          catalogChanged = true;
         }
       }
 
@@ -166,6 +168,7 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
         if (fresh.length) {
           await db.products.bulkPut(fresh);
           mutated = true;
+          catalogChanged = true;
         }
       }
 
@@ -182,8 +185,8 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
       for (const item of deletes) {
         if (item.tableName === 'users') await db.users.delete(item.recordId);
         if (item.tableName === 'settings') await db.settings.delete(item.recordId);
-        if (item.tableName === 'categories') await db.categories.delete(item.recordId);
-        if (item.tableName === 'products') await db.products.delete(item.recordId);
+        if (item.tableName === 'categories') { await db.categories.delete(item.recordId); catalogChanged = true; }
+        if (item.tableName === 'products') { await db.products.delete(item.recordId); catalogChanged = true; }
         if (item.tableName === 'sales') {
           await db.sales.delete(item.recordId);
           await db.sale_items.where('saleId').equals(item.recordId).delete();
@@ -194,6 +197,12 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
       }
     },
   );
+
+  // Notify UI that catalog (products/categories) changed so all pages
+  // that show the product list can reload from IndexedDB immediately.
+  if (catalogChanged) {
+    window.dispatchEvent(new Event('calpos:catalog-updated'));
+  }
 
   return mutated;
 }
