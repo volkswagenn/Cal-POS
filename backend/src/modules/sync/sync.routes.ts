@@ -277,7 +277,15 @@ export async function syncRoutes(app: FastifyInstance) {
     const applied: string[] = [];
     const failed: Array<{ id?: string; recordId: string; tableName: string; message: string }> = [];
 
-    for (const change of input.changes) {
+    // Process in dependency order: categories must exist before products (FK constraint)
+    const TABLE_ORDER: Record<string, number> = {
+      users: 0, settings: 0, categories: 1, products: 2, sales: 3,
+    };
+    const ordered = [...input.changes].sort(
+      (a, b) => (TABLE_ORDER[a.tableName] ?? 9) - (TABLE_ORDER[b.tableName] ?? 9),
+    );
+
+    for (const change of ordered) {
       try {
         if (change.tableName === 'users') {
           await pushUser(request.user.shopId, change);
