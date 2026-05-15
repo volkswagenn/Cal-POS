@@ -16,6 +16,20 @@ export default {
       boxShadow: {
         panel: '0 12px 34px rgba(15, 23, 42, 0.08)',
       },
+      keyframes: {
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '15%': { transform: 'translateX(-8px)' },
+          '30%': { transform: 'translateX(7px)' },
+          '45%': { transform: 'translateX(-6px)' },
+          '60%': { transform: 'translateX(5px)' },
+          '75%': { transform: 'translateX(-3px)' },
+          '90%': { transform: 'translateX(2px)' },
+        },
+      },
+      animation: {
+        shake: 'shake 0.5s ease-in-out',
+      },
     },
   },
   plugins: [require('@tailwindcss/forms')],

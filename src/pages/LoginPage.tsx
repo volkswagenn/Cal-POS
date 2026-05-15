@@ -9,6 +9,7 @@ import { ApiError, hasApiBaseUrl } from '../services/api/client';
 import type { AuthTokens, User } from '../types';
 
 const RESET_PIN_LENGTH = 6;
+const LOGIN_PIN_LENGTH = 6;
 
 export function LoginPage() {
   const [mode, setMode] = useState<'password' | 'pin'>('password');
@@ -16,6 +17,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pin, setPin] = useState('');
+  const [pinShake, setPinShake] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetPin, setResetPin] = useState('');
   const [resetError, setResetError] = useState('');
@@ -69,6 +71,44 @@ export function LoginPage() {
     navigate('/select');
   };
 
+  const pressLoginPin = async (digit: string) => {
+    if (pin.length >= LOGIN_PIN_LENGTH) return;
+    const next = pin + digit;
+    setPin(next);
+    if (next.length === LOGIN_PIN_LENGTH) {
+      // auto-submit
+      let user: User | null = null;
+      let tokens: AuthTokens | undefined;
+      let apiAuthRejected = false;
+      if (hasApiBaseUrl) {
+        try {
+          const result = await authApi.loginWithPin(next);
+          user = result.user;
+          tokens = result.tokens;
+        } catch (error) {
+          if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+            apiAuthRejected = true;
+          }
+        }
+      }
+      if (!user && !apiAuthRejected) {
+        user = await UserRepository.loginByPin(next);
+      }
+      if (!user) {
+        setPinShake(true);
+        setTimeout(() => { setPin(''); setPinShake(false); }, 600);
+        toast('PIN ไม่ถูกต้อง', 'error');
+        return;
+      }
+      if (hasApiBaseUrl && !tokens) {
+        toast('เซิร์ฟเวอร์ออฟไลน์ — ใช้งานแบบเครื่องเดียวชั่วคราว ข้อมูลจะไม่ sync', 'error');
+      }
+      setSession(user, tokens);
+      toast(`ยินดีต้อนรับ ${user.displayName}`, 'success');
+      navigate('/select');
+    }
+  };
+
   const pressResetDigit = (digit: string) => {
     if (resetPin.length >= RESET_PIN_LENGTH) return;
     const next = resetPin + digit;
@@ -100,21 +140,66 @@ export function LoginPage() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_top_left,#dff0ff,transparent_36%),linear-gradient(135deg,#f8fbff,#eaf3fb)] p-4">
-      <form onSubmit={submit} className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-panel">
-        <div className="mb-6">
-          <div className="text-3xl font-black text-primary-700">Cal POS</div>
-          <p className="mt-2 text-sm text-slate-500">เข้าสู่ระบบขายหน้าร้าน</p>
+      {/* Password mode */}
+      {mode === 'pin' ? (
+        <div className="w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-panel">
+          {/* Header */}
+          <div className="bg-primary-600 px-5 py-5 text-center text-white">
+            <div className="text-2xl font-black">Cal POS</div>
+            <p className="mt-0.5 text-sm font-medium opacity-90">ใส่ PIN เพื่อเข้าสู่ระบบ</p>
+          </div>
+
+          {/* Dot indicators */}
+          <div className={`flex justify-center gap-4 py-6 ${pinShake ? 'animate-shake' : ''}`}>
+            {Array.from({ length: LOGIN_PIN_LENGTH }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-4 w-4 rounded-full border-2 transition-all duration-150 ${
+                  i < pin.length
+                    ? 'scale-110 border-primary-600 bg-primary-600'
+                    : 'border-slate-300 bg-transparent'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Numpad */}
+          <div className="grid grid-cols-3 gap-px border-t border-slate-200 bg-slate-200">
+            {['1','2','3','4','5','6','7','8','9'].map((d) => (
+              <button key={d} type="button" onClick={() => pressLoginPin(d)}
+                className="bg-white py-5 text-2xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700">
+                {d}
+              </button>
+            ))}
+            <button type="button" onClick={() => { setMode('password'); setPin(''); }}
+              className="bg-white py-5 text-xs font-bold text-slate-400 active:bg-slate-50">
+              รหัสผ่าน
+            </button>
+            <button type="button" onClick={() => pressLoginPin('0')}
+              className="bg-white py-5 text-2xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700">
+              0
+            </button>
+            <button type="button" onClick={() => setPin((p) => p.slice(0, -1))} disabled={pin.length === 0}
+              className="flex items-center justify-center bg-white py-5 active:bg-slate-50 disabled:opacity-30">
+              <Delete size={22} className="text-slate-600" />
+            </button>
+          </div>
         </div>
-        <div className="mb-5 grid grid-cols-2 rounded-md bg-slate-100 p-1">
-          <button type="button" onClick={() => setMode('password')} className={`rounded-md py-2 font-bold ${mode === 'password' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500'}`}>รหัสผ่าน</button>
-          <button type="button" onClick={() => setMode('pin')} className={`rounded-md py-2 font-bold ${mode === 'pin' ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500'}`}>PIN</button>
-        </div>
-        {mode === 'password' ? (
+      ) : (
+        <form onSubmit={submit} className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-panel">
+          <div className="mb-6">
+            <div className="text-3xl font-black text-primary-700">Cal POS</div>
+            <p className="mt-2 text-sm text-slate-500">เข้าสู่ระบบขายหน้าร้าน</p>
+          </div>
+          <div className="mb-5 grid grid-cols-2 rounded-md bg-slate-100 p-1">
+            <button type="button" className="rounded-md bg-white py-2 font-bold text-primary-700 shadow-sm">รหัสผ่าน</button>
+            <button type="button" onClick={() => { setMode('pin'); setUsername(''); setPassword(''); }} className="rounded-md py-2 font-bold text-slate-500">PIN</button>
+          </div>
           <div className="space-y-4">
             <label className="block text-sm font-bold text-slate-700">ชื่อผู้ใช้
               <div className="mt-1 flex items-center gap-2 rounded-md border border-slate-300 px-3">
                 <UserRound size={18} className="text-slate-400" />
-                <input className="w-full border-0 focus:ring-0" value={username} onChange={(event) => setUsername(event.target.value)} />
+                <input className="w-full border-0 focus:ring-0" value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
               </div>
             </label>
             <label className="block text-sm font-bold text-slate-700">รหัสผ่าน
@@ -127,13 +212,9 @@ export function LoginPage() {
               </div>
             </label>
           </div>
-        ) : (
-          <label className="block text-sm font-bold text-slate-700">PIN 4-6 หลัก
-            <input inputMode="numeric" maxLength={6} className="mt-1 w-full rounded-md border-slate-300 text-center text-3xl font-black tracking-widest" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} autoFocus />
-          </label>
-        )}
-        <button className="mt-6 w-full rounded-md bg-primary-600 py-3 text-lg font-black text-white hover:bg-primary-700">เข้าสู่ระบบ</button>
-      </form>
+          <button className="mt-6 w-full rounded-md bg-primary-600 py-3 text-lg font-black text-white hover:bg-primary-700">เข้าสู่ระบบ</button>
+        </form>
+      )}
 
       {/* Reset Admin PIN Modal */}
       {showResetModal && (
