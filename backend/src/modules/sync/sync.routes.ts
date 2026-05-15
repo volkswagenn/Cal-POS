@@ -11,11 +11,23 @@ import { hashPassword } from '../../utils/password.js';
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000; // 5 minutes tolerance
 
-function clampUpdatedAt(isoString: string): Date {
-  const clientTime = new Date(isoString);
-  const serverNow = new Date();
-  // If client clock is more than 5 minutes ahead, use server time to prevent "always wins" skew
-  return clientTime.getTime() > serverNow.getTime() + MAX_CLOCK_SKEW_MS ? serverNow : clientTime;
+function clampUpdatedAt(_isoString: string): Date {
+  // Always stamp with server receipt time.
+  //
+  // Why: The pull endpoint filters by `updatedAt > since`. If a client
+  // pushes an item with an old timestamp (e.g. it was stuck in the sync
+  // queue for hours), `updatedAt` would be less than other devices'
+  // cursors and those devices would NEVER receive the item.
+  //
+  // Using server receipt time guarantees: any item pushed NOW will have
+  // updatedAt = NOW, which is always greater than any cursor that was
+  // recorded before this push. Other devices will pick it up on the
+  // next pull.
+  //
+  // Trade-off: conflict resolution becomes "last-push-wins" instead of
+  // "last-edit-wins". Acceptable for a POS system where edits are rare
+  // and the sync debounce is only 800 ms.
+  return new Date();
 }
 
 async function wasDeleted(shopId: string, table: string, recordId: string): Promise<boolean> {
