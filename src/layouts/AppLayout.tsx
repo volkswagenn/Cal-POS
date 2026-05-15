@@ -7,6 +7,8 @@ import type { PermissionKey } from '../utils/permissions';
 import { usePrinterLiveStatus } from '../hooks/usePrinterLiveStatus';
 import { useAsync } from '../hooks/useAsync';
 import { SettingsRepository } from '../db/repositories/SettingsRepository';
+import { SyncQueueRepository } from '../db/syncQueue';
+import { hasApiBaseUrl } from '../services/api/client';
 import { formatDateTime } from '../utils/date';
 import { useTapCounter } from '../hooks/useTapCounter';
 import { enableMirrorMode } from '../stores/mirrorStore';
@@ -51,7 +53,27 @@ export function AppLayout() {
   const navigate = useNavigate();
   const printerStatus = usePrinterLiveStatus();
   const { data: lastBackupAt } = useAsync(() => SettingsRepository.getSetting('lastBackupAt'), []);
+  const { data: deadCount } = useAsync(() => SyncQueueRepository.countDead(), []);
   const isBackupStale = lastBackupAt !== null && (!lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > BACKUP_WARN_MS);
+
+  // Whether the data is actually safe on the cloud (so a reinstall won't lose
+  // it). True only when the cloud is configured, at least one sync has
+  // succeeded, and nothing is stuck in the dead-letter queue. Used to soften
+  // the backup banner instead of always scaring the user.
+  const lastCloudSyncAt = typeof localStorage !== 'undefined' ? localStorage.getItem('calpos_last_sync_at') : null;
+  const cloudSafe = hasApiBaseUrl && !!lastCloudSyncAt && (deadCount ?? 0) === 0;
+
+  const backupBannerMessage = lastBackupAt
+    ? `สำรองข้อมูลล่าสุด: ${formatDateTime(lastBackupAt)} — แนะนำให้สำรองข้อมูลก่อนอัพเดตแอป`
+    : cloudSafe
+      ? 'ข้อมูลถูก sync ขึ้น cloud แล้ว ✓ — แนะนำสำรองไฟล์เพิ่มเพื่อความมั่นใจ'
+      : !hasApiBaseUrl
+        ? 'แอปนี้ไม่ได้เชื่อม cloud — หากติดตั้งแอปใหม่ ข้อมูลจะหาย กรุณาสำรองข้อมูล'
+        : (deadCount ?? 0) > 0
+          ? `มีข้อมูล ${deadCount} รายการ sync ขึ้น cloud ไม่สำเร็จ — กรุณาสำรองข้อมูล`
+          : 'ยังไม่เคย sync ขึ้น cloud สำเร็จ — หากติดตั้งแอปใหม่ ข้อมูลจะหาย';
+  // Soft (informational) when data is already safe on cloud; strong warning otherwise.
+  const backupBannerSoft = cloudSafe || !!lastBackupAt;
 
   const { tap: tapLogo, count: tapLogoCount } = useTapCounter(4, () => {
     enableMirrorMode();
@@ -181,12 +203,8 @@ export function AppLayout() {
 
       <main className={`pt-14 transition-[margin] lg:pt-16 ${sidebarCollapsed ? 'lg:ml-0' : 'lg:ml-72'}`}>
         {isBackupStale && (
-          <div className="flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm font-bold text-white">
-            <span>
-              {lastBackupAt
-                ? `สำรองข้อมูลล่าสุด: ${formatDateTime(lastBackupAt)} — แนะนำให้สำรองข้อมูลก่อนอัพเดตแอป`
-                : 'ยังไม่เคยสำรองข้อมูล — หากติดตั้งแอปใหม่ ข้อมูลจะหาย'}
-            </span>
+          <div className={`flex items-center justify-between gap-3 px-4 py-2 text-sm font-bold text-white ${backupBannerSoft ? 'bg-sky-500' : 'bg-amber-500'}`}>
+            <span>{backupBannerMessage}</span>
             <button
               onClick={() => navigate('/backup')}
               className="shrink-0 rounded bg-white/20 px-3 py-1 hover:bg-white/30"
