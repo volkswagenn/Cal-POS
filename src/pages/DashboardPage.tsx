@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
+import { LoadingOverlay } from '../components/common/LoadingOverlay';
 import { ReportRepository } from '../db/repositories/ReportRepository';
 import { useAsync } from '../hooks/useAsync';
 import { hasApiBaseUrl } from '../services/api/client';
@@ -11,7 +12,7 @@ import { money } from '../utils/money';
 
 export function DashboardPage() {
   const [date, setDate] = useState(formatDateInput());
-  const { data: daily } = useAsync(async () => {
+  const { data: daily, loading } = useAsync(async () => {
     if (hasApiBaseUrl && navigator.onLine) return reportsApi.daily(date);
 
     const [summary, hourly, products, payments, employees] = await Promise.all([
@@ -37,7 +38,8 @@ export function DashboardPage() {
   ] as const;
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="relative p-4 md:p-6">
+      <LoadingOverlay show={loading && !daily} />
       <PageHeader
         title="แดชบอร์ด"
         subtitle="สรุปรายวัน รายชั่วโมง สินค้าขายดี ช่องทางชำระเงิน และยอดขายพนักงาน"

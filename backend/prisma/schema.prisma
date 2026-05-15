@@ -23,6 +23,7 @@ model Shop {
   parkedBills  ParkedBill[]
   backups      BackupSnapshot[]
   syncLogs     SyncLog[]
+  devices      Device[]
 }
 
 model User {
@@ -215,6 +216,20 @@ model SyncLog {
   @@index([shopId, action, syncedAt])
   // Daily TTL prune (syncedAt < cutoff, no shopId predicate)
   @@index([syncedAt])
+}
+
+// Maps a raw deviceId (UUID) to a human-readable code ("POS1") so the
+// notification feed can label cross-device activity. Independent of the
+// sync push/pull pipeline — registered via its own endpoint.
+model Device {
+  deviceId  String   @id
+  shopId    String
+  code      String
+  updatedAt DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId])
 }
 
 model RefreshToken {

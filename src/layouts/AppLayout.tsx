@@ -10,6 +10,7 @@ import { SettingsRepository } from '../db/repositories/SettingsRepository';
 import { formatDateTime } from '../utils/date';
 import { useTapCounter } from '../hooks/useTapCounter';
 import { enableMirrorMode } from '../stores/mirrorStore';
+import { NotificationBell } from '../components/common/NotificationBell';
 
 const BACKUP_WARN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -156,13 +157,7 @@ export function AppLayout() {
           <div className="hidden min-w-0 truncate text-sm font-semibold text-slate-500 sm:block">ระบบขายหน้าร้านแบบออฟไลน์</div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate('/select')}
-            className="hidden items-center gap-1 rounded-md px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-100 sm:flex"
-          >
-            <LogOut size={17} /> ออก
-          </button>
+          <NotificationBell tone="light" />
           <button
             type="button"
             onClick={() => navigate('/front-pos')}

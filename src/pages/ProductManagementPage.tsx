@@ -3,6 +3,7 @@ import { useBlocker } from 'react-router-dom';
 import { ArrowDownAZ, Boxes, ChevronDown, Eye, EyeOff, GripVertical, Pencil, Plus, Save, Search, Tags, Trash2, X } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
+import { LoadingOverlay } from '../components/common/LoadingOverlay';
 import { Modal } from '../components/common/Modal';
 import { ProductRepository } from '../db/repositories/ProductRepository';
 import { CategoryRepository } from '../db/repositories/CategoryRepository';
@@ -45,7 +46,7 @@ function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
 }
 
 export function ProductManagementPage() {
-  const { data: products, reload: reloadProducts } = useAsync(() => ProductRepository.getProducts(true), []);
+  const { data: products, reload: reloadProducts, loading: loadingProducts } = useAsync(() => ProductRepository.getProducts(true), []);
   const { data: categories, reload: reloadCategories } = useAsync(() => CategoryRepository.getCategories(true), []);
   const [activeTab, setActiveTab] = useState<ProductTab>('products');
   const [query, setQuery] = useState('');
@@ -524,7 +525,8 @@ export function ProductManagementPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="relative p-4 md:p-6">
+      <LoadingOverlay show={loadingProducts && !products} />
       <PageHeader title="สินค้าและหมวดหมู่" subtitle="จัดการสินค้า หมวดหมู่ และลำดับปุ่มสินค้าในหน้าขาย" />
 
       <div className="mb-4 inline-grid grid-cols-3 rounded-lg bg-white p-1 shadow-sm">

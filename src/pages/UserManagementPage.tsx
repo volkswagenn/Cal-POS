@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
+import { LoadingOverlay } from '../components/common/LoadingOverlay';
 import { Modal } from '../components/common/Modal';
 import { UserRepository } from '../db/repositories/UserRepository';
 import { SettingsRepository } from '../db/repositories/SettingsRepository';
@@ -36,7 +37,7 @@ const emptyUserForm = (role: Role): UserForm => ({
 });
 
 export function UserManagementPage() {
-  const { data: users, reload } = useAsync(() => UserRepository.getUsers(), []);
+  const { data: users, reload, loading } = useAsync(() => UserRepository.getUsers(), []);
   const { data: positionSetting, reload: reloadPositionSetting } = useAsync(() => SettingsRepository.getSetting(positionSettingKey, JSON.stringify(defaultPositions)), []);
   const [activeTab, setActiveTab] = useState<UserTab>('users');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -221,7 +222,8 @@ export function UserManagementPage() {
   const isRoleChangeLocked = editingUser?.role === ADMIN_ROLE && activeAdminCount <= 1;
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="relative p-4 md:p-6">
+      <LoadingOverlay show={loading && !users} />
       <PageHeader title="จัดการผู้ใช้" subtitle="เพิ่มพนักงาน กำหนดตำแหน่ง และเลือกฟังก์ชันที่อนุญาตให้ใช้งาน" />
 
       <div className="mb-4 inline-grid grid-cols-2 rounded-lg bg-white p-1 shadow-sm">

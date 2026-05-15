@@ -1,8 +1,9 @@
-import { LogOut, Store, Warehouse } from 'lucide-react';
+import { Store, Warehouse } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useTapCounter } from '../hooks/useTapCounter';
 import { enableMirrorMode } from '../stores/mirrorStore';
+import { NotificationBell } from '../components/common/NotificationBell';
 
 export function FrontPosLayout() {
   const navigate = useNavigate();
@@ -27,13 +28,9 @@ export function FrontPosLayout() {
           <div className="truncate text-xs font-bold opacity-90 sm:text-sm">{user.displayName}</div>
         </div>
         <div className="flex h-full shrink-0 items-stretch gap-1">
-          <button
-            type="button"
-            onClick={() => navigate('/select')}
-            className="flex min-w-16 flex-col items-center justify-center gap-0.5 rounded-md px-3 text-xs font-black hover:bg-primary-700 sm:min-w-20"
-          >
-            <LogOut size={18} /> ออก
-          </button>
+          <div className="flex items-center px-1">
+            <NotificationBell tone="dark" />
+          </div>
           <NavLink
             to="/front-pos"
             className={({ isActive }) => `flex min-w-20 flex-col items-center justify-center gap-0.5 rounded-md px-3 text-xs font-black ${isActive ? 'bg-white text-primary-700' : 'hover:bg-primary-700'}`}

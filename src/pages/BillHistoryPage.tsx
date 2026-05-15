@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Eye, Printer, RotateCcw, Search, XCircle } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
+import { LoadingOverlay } from '../components/common/LoadingOverlay';
 import { Modal } from '../components/common/Modal';
 import { EmptyState } from '../components/common/EmptyState';
 import { SaleRepository } from '../db/repositories/SaleRepository';
@@ -43,7 +44,7 @@ export function BillHistoryPage() {
   const user = useAuthStore((state) => state.user)!;
   const toast = useToast();
   const { can } = usePermissions();
-  const { data, reload } = useAsync(() => SaleRepository.searchSales({ query, date, status }), [query, date, status]);
+  const { data, reload, loading } = useAsync(() => SaleRepository.searchSales({ query, date, status }), [query, date, status]);
 
   useEffect(() => {
     if (!selected) return;
@@ -115,7 +116,8 @@ export function BillHistoryPage() {
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="relative p-4 md:p-6">
+      <LoadingOverlay show={loading && !data} />
       <PageHeader title="ประวัติบิล" subtitle="ค้นหา ตรวจสอบ พิมพ์ซ้ำ void และ refund บิลที่บันทึกไว้" />
       <Card className="mb-4 p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_180px_180px]">

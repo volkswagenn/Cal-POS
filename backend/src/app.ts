@@ -12,6 +12,7 @@ import { reportRoutes } from './modules/reports/reports.routes.js';
 import { saleRoutes } from './modules/sales/sales.routes.js';
 import { syncRoutes } from './modules/sync/sync.routes.js';
 import { syncWsRoute } from './modules/sync/sync.ws.js';
+import { notificationRoutes } from './modules/sync/notifications.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { backupRoutes } from './modules/backup/backup.routes.js';
 import { scheduleAutoBackup } from './modules/backup/backup.scheduler.js';
@@ -65,6 +66,7 @@ export async function buildApp() {
   await app.register(saleRoutes, { prefix: '/api/sales' });
   await app.register(syncRoutes, { prefix: '/api/sync' });
   await app.register(syncWsRoute, { prefix: '/api/sync' });
+  await app.register(notificationRoutes, { prefix: '/api/notifications' });
   await app.register(reportRoutes, { prefix: '/api/reports' });
   await app.register(backupRoutes, { prefix: '/api/backup' });
 
