@@ -34,6 +34,26 @@ export const SettingsRepository = {
       await SyncQueueRepository.enqueue({ tableName: 'settings', recordId: key, action: 'upsert', payload: setting });
     }
   },
+  /**
+   * Ensure a setting exists in IndexedDB AND has been pushed to the cloud
+   * at least once. Safe to call on every boot — idempotent via backfill guard.
+   *
+   * - Key not found  → write defaultValue and enqueue for push (seed + push)
+   * - Key exists     → enqueue for push if not already backfilled (push once)
+   *
+   * This fixes the case where positions/settings were never manually saved
+   * so other devices never received them via sync.
+   */
+  async ensureSettingSynced(key: string, defaultValue: string) {
+    const existing = await db.settings.get(key);
+    if (!existing) {
+      // First time on this device or data was cleared → seed defaults and push
+      await this.setSetting(key, defaultValue, { sync: true });
+      return;
+    }
+    // Already in IndexedDB — ensure it has been pushed at least once
+    await this.backfillSettingsForSync([key]);
+  },
   async backfillSettingsForSync(keys: string[]) {
     let count = 0;
     for (const key of keys) {
