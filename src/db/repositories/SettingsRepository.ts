@@ -35,23 +35,16 @@ export const SettingsRepository = {
     }
   },
   /**
-   * Ensure a setting exists in IndexedDB AND has been pushed to the cloud
-   * at least once. Safe to call on every boot — idempotent via backfill guard.
+   * Ensure a setting that already exists in IndexedDB has been pushed to the
+   * cloud at least once. Idempotent — guarded by settingsSyncBackfill flag.
    *
-   * - Key not found  → write defaultValue and enqueue for push (seed + push)
-   * - Key exists     → enqueue for push if not already backfilled (push once)
-   *
-   * This fixes the case where positions/settings were never manually saved
-   * so other devices never received them via sync.
+   * Only pushes when the key IS present locally (never overwrites cloud with
+   * stale defaults). Call this from pages that require elevated permission
+   * (e.g. UserManagementPage) so only authorised users trigger the push.
    */
-  async ensureSettingSynced(key: string, defaultValue: string) {
+  async ensureSettingSynced(key: string) {
     const existing = await db.settings.get(key);
-    if (!existing) {
-      // First time on this device or data was cleared → seed defaults and push
-      await this.setSetting(key, defaultValue, { sync: true });
-      return;
-    }
-    // Already in IndexedDB — ensure it has been pushed at least once
+    if (!existing) return; // nothing local to push — let sync pull decide
     await this.backfillSettingsForSync([key]);
   },
   async backfillSettingsForSync(keys: string[]) {

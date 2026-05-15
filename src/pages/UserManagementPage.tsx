@@ -69,6 +69,12 @@ export function UserManagementPage() {
     setPositionDrafts(savedPositions);
   }, [savedPositions]);
 
+  // เมื่อหน้านี้โหลด (คนที่มีสิทธิ์จัดการผู้ใช้) → ตรวจว่า userPositions
+  // เคยถูก push ขึ้น cloud แล้วหรือยัง ถ้ายัง → push ทันที (backfill once)
+  useEffect(() => {
+    SettingsRepository.ensureSettingSynced(positionSettingKey);
+  }, []);
+
   const openCreateUser = () => {
     setEditingUser(null);
     setShowPasswordInModal(false);

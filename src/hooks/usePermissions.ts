@@ -3,6 +3,7 @@ import { SettingsRepository } from '../db/repositories/SettingsRepository';
 import { useAuthStore } from '../stores/authStore';
 import { defaultPositions, hasPermission, parsePositions, positionSettingKey, permissionsForRole, type PermissionKey } from '../utils/permissions';
 import { useAsync } from './useAsync';
+import { requestSync } from '../services/api/syncScheduler';
 
 export function usePermissions() {
   const user = useAuthStore((state) => state.user);
@@ -33,6 +34,14 @@ export function usePermissions() {
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
   }, [reload]);
+
+  useEffect(() => {
+    // Role ไม่ match position ใดเลย → ดึงข้อมูลจาก cloud ทันที
+    // (เครื่องใหม่ยังไม่ได้ sync หรือ positions ถูกเปลี่ยนบนเครื่องอื่น)
+    if (isRoleOrphan) {
+      requestSync({ immediate: true });
+    }
+  }, [isRoleOrphan]);
 
   return {
     user,

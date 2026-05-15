@@ -3,11 +3,9 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { seedDatabase } from '../db/seed';
 import { CatalogDefaultRepository } from '../db/repositories/CatalogDefaultRepository';
-import { SettingsRepository } from '../db/repositories/SettingsRepository';
 import { ToastProvider, useToast } from '../components/common/Toast';
 import { syncMirrorModeToBody } from '../stores/mirrorStore';
 import { useSync } from '../hooks/useSync';
-import { defaultPositions, positionSettingKey } from '../utils/permissions';
 
 // Runs inside ToastProvider so it can call useToast()
 function SyncManager() {
@@ -43,9 +41,6 @@ export function AppProviders() {
     syncMirrorModeToBody();
     seedDatabase()
       .then(() => CatalogDefaultRepository.ensureProductNameBahtDefault())
-      // ตรวจสอบว่า userPositions (ตำแหน่ง/สิทธิ์) อยู่ใน IndexedDB
-      // และเคยถูก push ขึ้น cloud แล้ว — ถ้ายัง ให้ seed ค่า default และ push ทันที
-      .then(() => SettingsRepository.ensureSettingSynced(positionSettingKey, JSON.stringify(defaultPositions)))
       .finally(() => setReady(true));
   }, []);
 
