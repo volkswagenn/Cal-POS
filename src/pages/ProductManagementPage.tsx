@@ -441,7 +441,7 @@ export function ProductManagementPage() {
     const targetPosition = Math.min(Math.max(Number(movePosition || 1), 1), draftOrder.length);
     const nextOrder = moveItem(draftOrder, moveTarget.index, targetPosition - 1);
     setDraftOrder(nextOrder);
-    toast(`ย้าย ${moveTarget.product.name} ไปที่ลำดับ ${targetPosition} แล้ว กดบันทึกการแก้ไขเพื่อบันทึกจริง`, 'success');
+    toast(`ย้าย ${moveTarget.product.displayName || moveTarget.product.name} ไปที่ลำดับ ${targetPosition} แล้ว กดบันทึกการแก้ไขเพื่อบันทึกจริง`, 'success');
     setMoveTarget(null);
     setMovePosition('');
   };
@@ -495,12 +495,12 @@ export function ProductManagementPage() {
     if (!canManageCatalog) return toast('ไม่มีสิทธิ์ลบสินค้า', 'error');
     setConfirmDialog({
       title: 'ลบรายการสินค้า',
-      message: `ต้องการลบสินค้า ${product.name} หรือไม่?`,
+      message: `ต้องการลบสินค้า ${product.displayName || product.name} หรือไม่?`,
       confirmText: 'ลบสินค้า',
       onConfirm: async () => {
         await ProductRepository.deleteProduct(product.id);
         setConfirmDialog(null);
-        toast(`ลบ ${product.name} แล้ว`, 'success');
+        toast(`ลบ ${product.displayName || product.name} แล้ว`, 'success');
         reloadProducts();
       },
     });
@@ -775,7 +775,7 @@ export function ProductManagementPage() {
                         <td className="p-3">
                           <input
                             className="rounded-md border-slate-300 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-slate-900 disabled:opacity-100"
-                            value={rowDraft.name}
+                            value={isEditing ? rowDraft.name : (product.displayName || product.name)}
                             disabled={!isEditing}
                             onChange={(event) => updateProductDraft({ name: event.target.value, displayName: event.target.value })}
                           />
@@ -998,7 +998,7 @@ export function ProductManagementPage() {
                   {index + 1}
                 </button>
                 <div className="min-w-0">
-                  <div className="truncate font-black">{product.name}</div>
+                  <div className="truncate font-black">{product.displayName || product.name}</div>
                   <div className="text-xs text-slate-500">{categoryName(product.categoryId)}</div>
                 </div>
                 <div className="font-bold">{product.price.toLocaleString('th-TH')} บาท</div>
@@ -1135,7 +1135,7 @@ export function ProductManagementPage() {
       {moveTarget && (
         <Modal title="ย้ายสินค้าไปลำดับที่" onClose={() => setMoveTarget(null)}>
           <div className="mb-4 rounded-md bg-slate-50 p-3">
-            <div className="font-black">{moveTarget.product.name}</div>
+            <div className="font-black">{moveTarget.product.displayName || moveTarget.product.name}</div>
             <div className="text-sm text-slate-500">ลำดับปัจจุบัน {moveTarget.index + 1} จาก {draftOrder.length}</div>
           </div>
           <label className="block text-sm font-bold text-slate-700">
