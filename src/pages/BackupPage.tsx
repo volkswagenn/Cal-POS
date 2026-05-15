@@ -76,8 +76,8 @@ export function BackupPage() {
   };
 
   const clearAllData = async () => {
-    if (clearAllPin.length < 6) {
-      setClearAllPinError('PIN ต้องมีอย่างน้อย 6 หลัก');
+    if (clearAllPin.length !== 6) {
+      setClearAllPinError('PIN ต้องเป็นตัวเลข 6 หลักเท่านั้น');
       return;
     }
     setClearAllPinError('');
@@ -115,8 +115,8 @@ export function BackupPage() {
   };
 
   const clearSalesHistory = async () => {
-    if (salesPin.length < 6) {
-      setSalesPinError('PIN ต้องมีอย่างน้อย 6 หลัก');
+    if (salesPin.length !== 6) {
+      setSalesPinError('PIN ต้องเป็นตัวเลข 6 หลักเท่านั้น');
       return;
     }
     setIsClearingSales(true);
@@ -525,14 +525,14 @@ export function BackupPage() {
               <p className="mt-1 text-sm font-medium text-red-700">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN Admin (6–8 หลัก)</label>
+              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN Admin (6 หลัก)</label>
               <input
                 ref={clearAllPinRef}
                 type="password"
                 inputMode="numeric"
-                maxLength={8}
+                maxLength={6}
                 value={clearAllPin}
-                onChange={(e) => { setClearAllPin(e.target.value.replace(/\D/g, '')); setClearAllPinError(''); }}
+                onChange={(e) => { setClearAllPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setClearAllPinError(''); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !isClearing) clearAllData(); }}
                 placeholder="••••••"
                 className="w-full rounded-md border border-slate-300 px-4 py-2.5 text-center text-lg font-black tracking-widest focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-200"
@@ -554,7 +554,7 @@ export function BackupPage() {
               <button
                 className="flex items-center justify-center gap-2 rounded-md bg-red-600 py-2.5 font-black text-white hover:bg-red-700 disabled:opacity-60"
                 onClick={clearAllData}
-                disabled={isClearing || clearAllPin.length < 6}
+                disabled={isClearing || clearAllPin.length !== 6}
               >
                 {isClearing ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}
                 {isClearing ? 'กำลังล้างข้อมูล...' : 'ยืนยันล้างข้อมูล'}
@@ -612,14 +612,14 @@ export function BackupPage() {
               <p className="mt-1 text-sm font-medium text-orange-700">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN Admin (6–8 หลัก)</label>
+              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN Admin (6 หลัก)</label>
               <input
                 ref={salesPinRef}
                 type="password"
                 inputMode="numeric"
-                maxLength={8}
+                maxLength={6}
                 value={salesPin}
-                onChange={(e) => { setSalesPin(e.target.value.replace(/\D/g, '')); setSalesPinError(''); }}
+                onChange={(e) => { setSalesPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setSalesPinError(''); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !isClearingSales) clearSalesHistory(); }}
                 placeholder="••••••"
                 className="w-full rounded-md border border-slate-300 px-4 py-2.5 text-center text-lg font-black tracking-widest focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
@@ -641,7 +641,7 @@ export function BackupPage() {
               <button
                 className="flex items-center justify-center gap-2 rounded-md bg-orange-600 py-2.5 font-black text-white hover:bg-orange-700 disabled:opacity-60"
                 onClick={clearSalesHistory}
-                disabled={isClearingSales || salesPin.length < 6}
+                disabled={isClearingSales || salesPin.length !== 6}
               >
                 {isClearingSales ? <RefreshCw size={16} className="animate-spin" /> : <History size={16} />}
                 {isClearingSales ? 'กำลังล้างข้อมูล...' : 'ยืนยันล้างประวัติ'}

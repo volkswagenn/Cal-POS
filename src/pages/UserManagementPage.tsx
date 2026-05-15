@@ -118,8 +118,8 @@ export function UserManagementPage() {
       if (isDeactivatingLastAdmin) return toast('ไม่สามารถปิดการใช้งาน Admin คนสุดท้ายได้', 'error');
     }
 
-    if (userForm.pin.length < 6 || userForm.pin.length > 8 || !/^\d+$/.test(userForm.pin)) {
-      return toast('PIN ต้องเป็นตัวเลข 6–8 หลัก', 'error');
+    if (userForm.pin.length !== 6 || !/^\d{6}$/.test(userForm.pin)) {
+      return toast('PIN ต้องเป็นตัวเลข 6 หลักเท่านั้น', 'error');
     }
 
     if (userForm.password && userForm.password !== userForm.confirmPassword) {
