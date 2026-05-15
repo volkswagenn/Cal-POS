@@ -93,13 +93,27 @@ export function NotificationBell({ tone = 'light' }: { tone?: 'light' | 'dark' }
 
   const handleUpdate = async () => {
     setRefreshing(true);
-    try {
-      requestSync({ immediate: true }); // uses existing sync path, no logic change
-      await new Promise((r) => setTimeout(r, 1200));
-      await load();
-    } finally {
-      setRefreshing(false);
-    }
+    // Run an immediate sync, wait for that sync cycle to actually finish,
+    // then hard-refresh the whole app so every page (dashboard, bills,
+    // products, ...) shows the freshly-synced data — no manual refresh.
+    await new Promise<void>((resolve) => {
+      let sawSyncing = false;
+      let settled = false;
+      const finish = (unsub: () => void) => {
+        if (settled) return;
+        settled = true;
+        unsub();
+        resolve();
+      };
+      const unsub = subscribeSync((s) => {
+        if (s.isSyncing) sawSyncing = true;
+        if (sawSyncing && !s.isSyncing) finish(unsub);
+      });
+      requestSync({ immediate: true }); // existing sync path, no logic change
+      // Safety cap so the button never hangs (e.g. backend cold start).
+      setTimeout(() => finish(unsub), 10_000);
+    });
+    window.location.reload();
   };
 
   if (!hasApiBaseUrl) return null;
