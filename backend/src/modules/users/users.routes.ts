@@ -10,7 +10,7 @@ const userSchema = z.object({
   username: z.string().min(1),
   displayName: z.string().min(1),
   password: z.string().min(1, 'กรุณาใส่รหัสผ่าน'),
-  pin: z.string().min(6).max(8).regex(/^\d+$/, 'PIN ต้องเป็นตัวเลขเท่านั้น'),
+  pin: z.string().length(6).regex(/^\d{6}$/, 'PIN ต้องเป็นตัวเลข 6 หลักเท่านั้น'),
   role: z.string().min(1),
   isActive: z.boolean().optional(),
 });

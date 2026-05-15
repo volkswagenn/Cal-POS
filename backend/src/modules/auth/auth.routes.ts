@@ -17,7 +17,7 @@ const passwordLoginSchema = z.object({
 });
 
 const pinLoginSchema = z.object({
-  pin: z.string().min(6).max(8).regex(/^\d+$/, 'PIN ต้องเป็นตัวเลขเท่านั้น'),
+  pin: z.string().length(6).regex(/^\d{6}$/, 'PIN ต้องเป็นตัวเลข 6 หลักเท่านั้น'),
   shopId: z.string().optional(),
 });
 

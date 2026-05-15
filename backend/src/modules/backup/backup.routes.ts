@@ -50,7 +50,7 @@ export async function backupRoutes(app: FastifyInstance) {
   });
 
   app.delete('/data', { preHandler: requireRole(['admin']) }, async (request, reply) => {
-    const { adminPin } = z.object({ adminPin: z.string().min(6) }).parse(request.body);
+    const { adminPin } = z.object({ adminPin: z.string().length(6).regex(/^\d{6}$/) }).parse(request.body);
 
     const admin = await prisma.user.findFirst({
       where: { shopId: request.user.shopId, id: request.user.sub, role: { in: ['admin', 'Admin'] }, isActive: true },

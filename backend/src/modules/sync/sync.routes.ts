@@ -54,7 +54,7 @@ const userPayloadSchema = z.object({
   id: z.string().min(1),
   username: z.string().min(1),
   displayName: z.string().min(1),
-  pin: z.string().min(6).max(8).regex(/^\d+$/),
+  pin: z.string().length(6).regex(/^\d{6}$/),
   passwordHash: z.string().min(1).optional(),
   passwordPlain: z.string().min(1).optional(),
   role: z.string().min(1),
