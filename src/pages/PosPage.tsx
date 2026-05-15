@@ -171,6 +171,14 @@ export function PosPage() {
     return labels[status];
   };
 
+  const openPayment = () => {
+    if (!cart.items.length) {
+      toast('กรุณาเลือกสินค้าก่อนชำระเงิน', 'error');
+      return;
+    }
+    setPayment(true);
+  };
+
   const parkCurrentCart = async () => {
     if (!cart.items.length) {
       setParkedOpen(true);
@@ -429,7 +437,7 @@ export function PosPage() {
           )}
         </section>
         <div className={`${mobileTab !== 'cart' ? 'hidden md:block' : 'block'} min-h-0`}>
-          <CartPanel onPay={() => setPayment(true)} />
+          <CartPanel onPay={openPayment} />
         </div>
       </div>
       {openPrice && <OpenPriceModal product={openPrice} onClose={() => setOpenPrice(null)} onConfirm={(price, note) => { cart.addProduct(openPrice, { price, note }); setOpenPrice(null); }} />}

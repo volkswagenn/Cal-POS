@@ -245,6 +245,7 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
   const billDiscountBase = Math.max(0, totals.subtotal - itemDiscountTotal);
   const billDiscountTotal = clampDiscount(billDiscountBase, billDiscountAmount, billDiscountPercent);
   const billDiscountValue = billDiscountMode === 'amount' ? billDiscountAmount : billDiscountPercent;
+  const canPay = items.length > 0;
 
   return (
     <section className="flex h-full flex-col rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -363,7 +364,13 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
           </div>
           <div className="flex justify-between text-xl font-black md:text-2xl"><span>รวมสุทธิ</span><span className="text-primary-700">{money(totals.grandTotal)}</span></div>
         </div>
-        <button onClick={onPay} className="w-full rounded-md bg-primary-600 py-3 text-xl font-black text-white shadow-sm hover:bg-primary-700 md:py-4 md:text-2xl">
+        <button
+          onClick={onPay}
+          disabled={!canPay}
+          className="w-full rounded-md bg-primary-600 py-3 text-xl font-black text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none md:py-4 md:text-2xl"
+          aria-disabled={!canPay}
+          title={canPay ? undefined : 'ไม่มีสินค้าในตะกร้า'}
+        >
           ชำระเงิน
         </button>
       </footer>
