@@ -5,24 +5,7 @@ import { clampDiscount } from '../../utils/money';
 import { uid } from '../../utils/id';
 import { SettingsRepository } from './SettingsRepository';
 import { SyncQueueRepository } from '../syncQueue';
-
-const DEVICE_CODE_KEY = 'calpos_device_code';
-const DEVICE_ID_KEY = 'calpos_device_id';
-
-// Short, stable, human-readable code (e.g. "A3F2") per device.
-// Stored in localStorage so bills generated on this device always carry the same tag.
-function getDeviceCode() {
-  const existing = localStorage.getItem(DEVICE_CODE_KEY);
-  if (existing) return existing;
-
-  // Derive from existing deviceId if available, otherwise generate fresh
-  const deviceId =
-    localStorage.getItem(DEVICE_ID_KEY) ||
-    (crypto.randomUUID ? crypto.randomUUID() : `device-${Date.now()}`);
-  const hex = deviceId.replace(/[^a-f0-9]/gi, '').slice(0, 4).toUpperCase().padEnd(4, '0');
-  localStorage.setItem(DEVICE_CODE_KEY, hex);
-  return hex;
-}
+import { getDeviceCode } from '../../utils/deviceCode';
 
 // O(1) per sale: the running sequence is kept in the settings table keyed by
 // device + scope, instead of scanning the entire sales table on every checkout

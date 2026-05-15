@@ -20,6 +20,7 @@ import { ReceiptCanvasPreview } from '../components/pos/ReceiptCanvasPreview';
 import { useAuthStore } from '../stores/authStore';
 import { usePrinterLiveStatus } from '../hooks/usePrinterLiveStatus';
 import { usePermissions } from '../hooks/usePermissions';
+import { getDeviceCode, setDeviceCode, DEVICE_CODE_MAX_LEN } from '../utils/deviceCode';
 import { ALL_PAYMENT_METHODS, PAYMENT_METHODS_SETTING_KEY, parseEnabledPaymentMethods, type PaymentMethodId } from './PaymentSettingsPage';
 
 const sizeOptions = [
@@ -1223,6 +1224,23 @@ export function SettingsPage() {
                       <option value="daily">รีเซ็ตทุกวัน</option>
                       <option value="continuous">นับต่อเนื่อง</option>
                     </select>
+                  </label>
+                  <label className="block text-sm font-bold text-slate-700">
+                    รหัสเครื่อง (ขึ้นต้นเลขบิล)
+                    <input
+                      className="mt-1 w-full rounded-md border-slate-300 uppercase tracking-widest"
+                      defaultValue={getDeviceCode()}
+                      maxLength={DEVICE_CODE_MAX_LEN}
+                      placeholder="เช่น POS1"
+                      onBlur={(event) => {
+                        const saved = setDeviceCode(event.target.value);
+                        event.target.value = saved;
+                        toast(`ตั้งรหัสเครื่องเป็น "${saved}" — บิลถัดไปจะขึ้นต้นด้วย ${saved}-`, 'success');
+                      }}
+                    />
+                    <span className="mt-1 block text-xs font-medium text-slate-500">
+                      ใช้แยกว่าบิลออกจากเครื่องไหน เครื่องละรหัสไม่ซ้ำกัน (A–Z, 0–9)
+                    </span>
                   </label>
                   <label className="block text-sm font-bold text-slate-700 sm:col-span-2">
                     ข้อความท้ายใบเสร็จ
