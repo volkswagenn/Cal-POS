@@ -5,6 +5,8 @@ import { SyncQueueRepository } from '../db/syncQueue';
 import { UserRepository } from '../db/repositories/UserRepository';
 import { SettingsRepository } from '../db/repositories/SettingsRepository';
 import { positionSettingKey } from '../utils/permissions';
+import { CategoryRepository } from '../db/repositories/CategoryRepository';
+import { ProductRepository } from '../db/repositories/ProductRepository';
 import {
   cancelScheduledSync,
   requestSync,
@@ -65,6 +67,10 @@ export function useSync(): SyncState {
     void SyncQueueRepository.resetStuckSyncing();
     void UserRepository.backfillUsersForSync();
     void SettingsRepository.backfillSettingsForSync([positionSettingKey]);
+    // Push categories first (FK parent), then products (FK child).
+    // Ensures existing seed/pre-sync data reaches the cloud so product FK never fails.
+    void CategoryRepository.backfillCategoriesForSync()
+      .then(() => ProductRepository.backfillProductsForSync());
 
     const wsClient = new SyncWebSocket({ onChanges: () => requestSync() });
 

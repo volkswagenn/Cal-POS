@@ -5,6 +5,8 @@ import { uid } from '../../utils/id';
 import { normalizeProductNameFields } from '../../utils/productName';
 import { SyncQueueRepository } from '../syncQueue';
 
+const PRODUCT_SYNC_BACKFILL_KEY = 'productsSyncBackfillV1';
+
 function productSortValue(product: Product) {
   if (product.isOpenPrice) return Number.MAX_SAFE_INTEGER;
   return Number.isFinite(product.price) ? product.price : Number.MAX_SAFE_INTEGER - 1;
@@ -86,6 +88,17 @@ export const ProductRepository = {
     await Promise.all(products
       .filter((product): product is Product => Boolean(product))
       .map((product) => SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product })));
+  },
+  // One-time migration: push all existing products to the cloud after categories
+  // are already synced (call backfillCategoriesForSync first to avoid FK errors).
+  async backfillProductsForSync() {
+    if (await db.settings.get(PRODUCT_SYNC_BACKFILL_KEY)) return 0;
+    const products = await db.products.toArray();
+    for (const product of products) {
+      await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });
+    }
+    await db.settings.put({ key: PRODUCT_SYNC_BACKFILL_KEY, value: 'true', updatedAt: nowIso() });
+    return products.length;
   },
   async reorderProductsByNameAscWithinCategories() {
     const timestamp = nowIso();
