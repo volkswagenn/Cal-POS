@@ -75,6 +75,17 @@ export function UserManagementPage() {
     SettingsRepository.ensureSettingSynced(positionSettingKey);
   }, []);
 
+  // เมื่อ device อื่น sync ตำแหน่งใหม่มา → reload UI ทันที
+  // (usePermissions ก็ฟัง event นี้อยู่แล้ว แต่ positionSetting ของหน้านี้แยกกัน)
+  useEffect(() => {
+    const onPositionsUpdated = () => {
+      reloadPositionSetting();
+      reload(); // reload users ด้วยเพราะ role อาจเปลี่ยน
+    };
+    window.addEventListener('calpos:permissions-updated', onPositionsUpdated);
+    return () => window.removeEventListener('calpos:permissions-updated', onPositionsUpdated);
+  }, [reloadPositionSetting, reload]);
+
   const openCreateUser = () => {
     setEditingUser(null);
     setShowPasswordInModal(false);

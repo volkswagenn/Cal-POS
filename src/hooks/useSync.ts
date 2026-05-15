@@ -88,9 +88,23 @@ export function useSync(): SyncState {
       requestSync({ immediate: true });
     }
 
+    // Periodic fallback: sync every 60s in case WebSocket drops.
+    // Keeps positions, products, and users current even without WS notifications.
+    const periodicId = window.setInterval(() => {
+      if (navigator.onLine) requestSync();
+    }, 60_000);
+
+    // Tab becomes visible again (user switches back) → sync immediately
+    const handleVisibilityChange = () => {
+      if (!document.hidden && navigator.onLine) requestSync({ immediate: true });
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(periodicId);
       wsClient.destroy();
       cancelScheduledSync();
     };
