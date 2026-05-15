@@ -83,27 +83,66 @@ async function detectConflictsAndCleanQueue(
   return conflicts;
 }
 
-async function applyPullChanges(response: SyncPullResponse) {
+/**
+ * Returns true if `incoming` should overwrite `local` (local missing, or the
+ * incoming row is strictly newer). Makes pull application idempotent so a
+ * replayed boundary row is a no-op — no Dexie write, no re-render feedback loop.
+ */
+function isNewer(incomingUpdatedAt: string | undefined, localUpdatedAt: string | undefined) {
+  if (!localUpdatedAt) return true;
+  if (!incomingUpdatedAt) return false;
+  return new Date(incomingUpdatedAt).getTime() > new Date(localUpdatedAt).getTime();
+}
+
+async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
+  const { categories, products, sales, deletes } = response.changes;
+  if (!categories.length && !products.length && !sales.length && !deletes.length) {
+    return false;
+  }
+
+  let mutated = false;
+
   await db.transaction(
     'rw',
     [db.categories, db.products, db.sales, db.sale_items, db.payments, db.discount_logs],
     async () => {
-      if (response.changes.categories.length) {
-        await db.categories.bulkPut(response.changes.categories);
+      if (categories.length) {
+        const existing = new Map(
+          (await db.categories.bulkGet(categories.map((c) => c.id)))
+            .filter(Boolean)
+            .map((c) => [c!.id, c!.updatedAt]),
+        );
+        const fresh = categories.filter((c) => isNewer(c.updatedAt, existing.get(c.id)));
+        if (fresh.length) {
+          await db.categories.bulkPut(fresh);
+          mutated = true;
+        }
       }
 
-      if (response.changes.products.length) {
-        await db.products.bulkPut(response.changes.products);
+      if (products.length) {
+        const existing = new Map(
+          (await db.products.bulkGet(products.map((p) => p.id)))
+            .filter(Boolean)
+            .map((p) => [p!.id, p!.updatedAt]),
+        );
+        const fresh = products.filter((p) => isNewer(p.updatedAt, existing.get(p.id)));
+        if (fresh.length) {
+          await db.products.bulkPut(fresh);
+          mutated = true;
+        }
       }
 
-      for (const detail of response.changes.sales) {
+      for (const detail of sales) {
+        const local = await db.sales.get(detail.sale.id);
+        if (!isNewer(detail.sale.updatedAt, local?.updatedAt)) continue;
         await db.sales.put(detail.sale);
         if (detail.items.length) await db.sale_items.bulkPut(detail.items);
         if (detail.payments.length) await db.payments.bulkPut(detail.payments);
         if (detail.discounts.length) await db.discount_logs.bulkPut(detail.discounts);
+        mutated = true;
       }
 
-      for (const item of response.changes.deletes) {
+      for (const item of deletes) {
         if (item.tableName === 'categories') await db.categories.delete(item.recordId);
         if (item.tableName === 'products') await db.products.delete(item.recordId);
         if (item.tableName === 'sales') {
@@ -112,9 +151,12 @@ async function applyPullChanges(response: SyncPullResponse) {
           await db.payments.where('saleId').equals(item.recordId).delete();
           await db.discount_logs.where('saleId').equals(item.recordId).delete();
         }
+        mutated = true;
       }
     },
   );
+
+  return mutated;
 }
 
 export const syncApi = {
@@ -174,6 +216,9 @@ export const syncApi = {
     const conflicts = await detectConflictsAndCleanQueue(response);
     await applyPullChanges(response);
     localStorage.setItem(LAST_SYNC_KEY, response.syncedAt);
+
+    // Keep the local queue from growing forever once items are confirmed.
+    await SyncQueueRepository.pruneSynced();
 
     return { syncedAt: response.syncedAt, conflicts };
   },

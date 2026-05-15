@@ -24,25 +24,42 @@ function getDeviceCode() {
   return hex;
 }
 
+// O(1) per sale: the running sequence is kept in the settings table keyed by
+// device + scope, instead of scanning the entire sales table on every checkout
+// (which degraded linearly as history grew). The full scan now runs at most
+// once — to seed the counter on upgrade — then never again.
+function seqFromBillNo(billNo: string) {
+  const n = Number(billNo.split('-').pop());
+  return Number.isFinite(n) ? n : 0;
+}
+
 async function nextBillNo() {
-  const today = new Date();
-  const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const deviceCode = getDeviceCode();
   const resetRule = await SettingsRepository.getSetting('billNumberResetRule', 'daily');
+  const scopeKey = resetRule === 'daily' ? datePart : 'all';
+  const counterKey = `billNoCounter:${deviceCode}:${scopeKey}`;
 
-  // Only count bills generated on THIS device, so each device keeps its own sequence
-  // and no two devices ever produce the same billNo.
-  const all = await db.sales.toArray();
-  const sameDevice = all.filter((sale) => sale.billNo.startsWith(`${deviceCode}-`));
-  const scope = resetRule === 'daily' ? sameDevice.filter((sale) => sale.billNo.includes(datePart)) : sameDevice;
-  const last = scope
-    .map((sale) => {
-      const parts = sale.billNo.split('-');
-      return Number(parts[parts.length - 1] || 0);
-    })
-    .filter(Number.isFinite)
-    .sort((a, b) => b - a)[0] ?? 0;
-  return `${deviceCode}-${datePart}-${String(last + 1).padStart(6, '0')}`;
+  const value = await db.transaction('rw', db.settings, db.sales, async () => {
+    const raw = (await db.settings.get(counterKey))?.value;
+    let current = raw != null ? Number(raw) : NaN;
+
+    if (!Number.isFinite(current)) {
+      // One-time seed: derive the starting point from any existing local bills
+      // for this device/scope so we never reuse a number after an upgrade.
+      const all = await db.sales.toArray();
+      current = all
+        .filter((s) => s.billNo.startsWith(`${deviceCode}-`))
+        .filter((s) => (resetRule === 'daily' ? s.billNo.includes(datePart) : true))
+        .reduce((max, s) => Math.max(max, seqFromBillNo(s.billNo)), 0);
+    }
+
+    const next = current + 1;
+    await db.settings.put({ key: counterKey, value: String(next), updatedAt: nowIso() });
+    return next;
+  });
+
+  return `${deviceCode}-${datePart}-${String(value).padStart(6, '0')}`;
 }
 
 export const SaleRepository = {

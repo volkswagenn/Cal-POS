@@ -10,8 +10,9 @@ import { useSync } from '../hooks/useSync';
 // Runs inside ToastProvider so it can call useToast()
 function SyncManager() {
   const toast = useToast();
-  const { conflictWarning } = useSync();
+  const { conflictWarning, deadLetterCount } = useSync();
   const lastWarning = useRef<string | null>(null);
+  const lastDeadCount = useRef(0);
 
   useEffect(() => {
     if (conflictWarning && conflictWarning !== lastWarning.current) {
@@ -19,6 +20,16 @@ function SyncManager() {
       toast(conflictWarning, 'info');
     }
   }, [conflictWarning, toast]);
+
+  useEffect(() => {
+    if (deadLetterCount > 0 && deadLetterCount !== lastDeadCount.current) {
+      lastDeadCount.current = deadLetterCount;
+      toast(
+        `⚠️ มี ${deadLetterCount} รายการ sync ขึ้น cloud ไม่สำเร็จ — ข้อมูลยังอยู่ในเครื่องนี้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่ที่หน้าสำรองข้อมูล`,
+        'error',
+      );
+    }
+  }, [deadLetterCount, toast]);
 
   return null;
 }

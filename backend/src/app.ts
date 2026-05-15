@@ -15,6 +15,7 @@ import { syncWsRoute } from './modules/sync/sync.ws.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { backupRoutes } from './modules/backup/backup.routes.js';
 import { scheduleAutoBackup } from './modules/backup/backup.scheduler.js';
+import { scheduleSyncMaintenance } from './modules/sync/sync.maintenance.js';
 
 export async function buildApp() {
   const app = Fastify({ logger: true });
@@ -68,6 +69,7 @@ export async function buildApp() {
   await app.register(backupRoutes, { prefix: '/api/backup' });
 
   scheduleAutoBackup(app);
+  scheduleSyncMaintenance(app);
 
   app.setErrorHandler((error, _request, reply) => {
     app.log.error(error);

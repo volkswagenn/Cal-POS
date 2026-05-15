@@ -237,7 +237,7 @@ export interface SyncQueueItem {
   recordId: string;
   action: 'upsert' | 'delete';
   payloadJson: string;
-  status: 'pending' | 'syncing' | 'synced' | 'failed';
+  status: 'pending' | 'syncing' | 'synced' | 'failed' | 'dead';
   attempts: number;
   lastError?: string;
   createdAt: string;

@@ -213,28 +213,43 @@ export async function syncRoutes(app: FastifyInstance) {
     const since = query.since ? new Date(query.since) : new Date(0);
 
     const [categories, products, sales, syncLogs] = await Promise.all([
-      // Fix: gte instead of gt to avoid missing records on timestamp boundary
+      // Strict `gt`: rows already delivered (updatedAt == cursor) are not
+      // replayed every poll. The cursor below tracks real data, not wall clock,
+      // so nothing is skipped either.
       prisma.category.findMany({
-        where: { shopId: request.user.shopId, updatedAt: { gte: since } },
+        where: { shopId: request.user.shopId, updatedAt: { gt: since } },
         orderBy: { updatedAt: 'asc' },
       }),
       prisma.product.findMany({
-        where: { shopId: request.user.shopId, updatedAt: { gte: since } },
+        where: { shopId: request.user.shopId, updatedAt: { gt: since } },
         orderBy: { updatedAt: 'asc' },
       }),
       prisma.sale.findMany({
-        where: { shopId: request.user.shopId, updatedAt: { gte: since } },
+        where: { shopId: request.user.shopId, updatedAt: { gt: since } },
         include: { items: true, payments: true, discounts: true },
         orderBy: { updatedAt: 'asc' },
       }),
       prisma.syncLog.findMany({
-        where: { shopId: request.user.shopId, syncedAt: { gte: since }, action: 'delete' },
+        where: { shopId: request.user.shopId, syncedAt: { gt: since }, action: 'delete' },
         orderBy: { syncedAt: 'asc' },
       }),
     ]);
 
+    // Cursor = newest timestamp we actually returned (not server "now").
+    // If nothing changed, echo the request cursor so the client never advances
+    // past data it hasn't seen.
+    const timestamps: number[] = [
+      ...categories.map((c) => c.updatedAt.getTime()),
+      ...products.map((p) => p.updatedAt.getTime()),
+      ...sales.map((s) => s.updatedAt.getTime()),
+      ...syncLogs.map((l) => l.syncedAt.getTime()),
+    ];
+    const nextCursor = timestamps.length
+      ? new Date(Math.max(...timestamps)).toISOString()
+      : (query.since ?? new Date(0).toISOString());
+
     return {
-      syncedAt: new Date().toISOString(),
+      syncedAt: nextCursor,
       changes: {
         categories: categories.map(toCategoryDto),
         products: products.map(toProductDto),

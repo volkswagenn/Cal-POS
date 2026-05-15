@@ -169,6 +169,8 @@ model ActivityLog {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, createdAt])
+  // Supports the daily TTL prune (createdAt < cutoff, no shopId predicate)
+  @@index([createdAt])
 }
 
 model AppSetting {
@@ -209,6 +211,10 @@ model SyncLog {
 
   @@index([shopId, syncedAt])
   @@index([shopId, table, recordId])
+  // Pull delete-feed: where shopId + action='delete' + syncedAt > cursor
+  @@index([shopId, action, syncedAt])
+  // Daily TTL prune (syncedAt < cutoff, no shopId predicate)
+  @@index([syncedAt])
 }
 
 model RefreshToken {

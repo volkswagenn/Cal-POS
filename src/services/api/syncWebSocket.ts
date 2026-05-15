@@ -23,6 +23,18 @@ export class SyncWebSocket {
   connect(): void {
     if (this.destroyed || !hasApiBaseUrl || !navigator.onLine) return;
 
+    // Guard against duplicate sockets: if one is already open or connecting,
+    // don't spin up another (handleOnline + initial mount could both call this).
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    // A reconnect was queued but we're connecting now — drop the stale timer.
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     const token = useAuthStore.getState().accessToken;
     if (!token) return;
 
