@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Boxes, ClipboardList, DatabaseBackup, History, LayoutDashboard, LogOut, Menu, Printer, Send, Settings, Store, Users, Warehouse } from 'lucide-react';
+import { AlertTriangle, Boxes, ClipboardList, DatabaseBackup, History, LayoutDashboard, LogOut, Menu, Printer, Send, Settings, Store, Users, Warehouse, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { usePermissions } from '../hooks/usePermissions';
@@ -46,6 +46,9 @@ export function AppLayout() {
   const [open, setOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [dismissedBackupBanner, setDismissedBackupBanner] = useState(() => (
+    typeof localStorage !== 'undefined' ? localStorage.getItem('calpos_dismissed_backup_banner') : null
+  ));
   const lastBurgerClick = useRef(0);
   const user = useAuthStore((state) => state.user)!;
   const logout = useAuthStore((state) => state.logout);
@@ -74,6 +77,7 @@ export function AppLayout() {
           : 'ยังไม่เคย sync ขึ้น cloud สำเร็จ — หากติดตั้งแอปใหม่ ข้อมูลจะหาย';
   // Soft (informational) when data is already safe on cloud; strong warning otherwise.
   const backupBannerSoft = cloudSafe || !!lastBackupAt;
+  const showBackupBanner = isBackupStale && dismissedBackupBanner !== backupBannerMessage;
 
   const { tap: tapLogo, count: tapLogoCount } = useTapCounter(4, () => {
     enableMirrorMode();
@@ -202,15 +206,29 @@ export function AppLayout() {
       </header>
 
       <main className={`pt-14 transition-[margin] lg:pt-16 ${sidebarCollapsed ? 'lg:ml-0' : 'lg:ml-72'}`}>
-        {isBackupStale && (
+        {showBackupBanner && (
           <div className={`flex items-center justify-between gap-3 px-4 py-2 text-sm font-bold text-white ${backupBannerSoft ? 'bg-sky-500' : 'bg-amber-500'}`}>
             <span>{backupBannerMessage}</span>
-            <button
-              onClick={() => navigate('/backup')}
-              className="shrink-0 rounded bg-white/20 px-3 py-1 hover:bg-white/30"
-            >
-              สำรองข้อมูล
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={() => navigate('/backup')}
+                className="rounded bg-white/20 px-3 py-1 hover:bg-white/30"
+              >
+                สำรองข้อมูล
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('calpos_dismissed_backup_banner', backupBannerMessage);
+                  setDismissedBackupBanner(backupBannerMessage);
+                }}
+                className="grid h-8 w-8 place-items-center rounded bg-white/15 hover:bg-white/25"
+                aria-label="ปิดแถบแจ้งเตือน"
+                title="ปิดแถบแจ้งเตือน"
+              >
+                <X size={17} />
+              </button>
+            </div>
           </div>
         )}
         {isRoleOrphan && (

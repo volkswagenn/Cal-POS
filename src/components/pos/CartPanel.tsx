@@ -357,11 +357,15 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
         </div>
         <div className="space-y-1 text-sm">
           <div className="flex justify-between text-slate-500"><span>รวม</span><b>{money(totals.subtotal)}</b></div>
-          <div className="flex justify-between text-red-600"><span>ส่วนลดรายการ</span><b>{money(itemDiscountTotal)}</b></div>
-          <div className="flex justify-between text-red-600">
-            <span>ส่วนลดท้ายบิล{billDiscountPercent > 0 ? ` ${billDiscountPercent}%` : ''}</span>
-            <b>{money(billDiscountTotal)}</b>
-          </div>
+          {itemDiscountTotal > 0 && (
+            <div className="flex justify-between text-red-600"><span>ส่วนลดรายการ</span><b>{money(itemDiscountTotal)}</b></div>
+          )}
+          {billDiscountTotal > 0 && (
+            <div className="flex justify-between text-red-600">
+              <span>ส่วนลดท้ายบิล{billDiscountPercent > 0 ? ` ${billDiscountPercent}%` : ''}</span>
+              <b>{money(billDiscountTotal)}</b>
+            </div>
+          )}
           <div className="flex justify-between text-xl font-black md:text-2xl"><span>รวมสุทธิ</span><span className="text-primary-700">{money(totals.grandTotal)}</span></div>
         </div>
         <button
