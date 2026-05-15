@@ -5,7 +5,8 @@ import { uid } from '../../utils/id';
 import { normalizeProductNameFields } from '../../utils/productName';
 import { SyncQueueRepository } from '../syncQueue';
 
-const PRODUCT_SYNC_BACKFILL_KEY = 'productsSyncBackfillV1';
+// V2: refresh updatedAt to now so delayed items aren't missed by pull cursors
+const PRODUCT_SYNC_BACKFILL_KEY = 'productsSyncBackfillV2';
 
 function productSortValue(product: Product) {
   if (product.isOpenPrice) return Number.MAX_SAFE_INTEGER;
@@ -91,11 +92,16 @@ export const ProductRepository = {
   },
   // One-time migration: push all existing products to the cloud after categories
   // are already synced (call backfillCategoriesForSync first to avoid FK errors).
+  // V2: refreshes updatedAt to now so items with old timestamps aren't missed
+  // by other devices whose pull cursor has already advanced past the original date.
   async backfillProductsForSync() {
     if (await db.settings.get(PRODUCT_SYNC_BACKFILL_KEY)) return 0;
+    const now = nowIso();
     const products = await db.products.toArray();
     for (const product of products) {
-      await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });
+      const payload = { ...product, updatedAt: now };
+      await db.products.update(product.id, { updatedAt: now });
+      await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload });
     }
     await db.settings.put({ key: PRODUCT_SYNC_BACKFILL_KEY, value: 'true', updatedAt: nowIso() });
     return products.length;

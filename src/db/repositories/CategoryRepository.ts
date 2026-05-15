@@ -5,7 +5,8 @@ import { uid } from '../../utils/id';
 import { SyncQueueRepository } from '../syncQueue';
 
 const DELETED_DEFAULT_CATEGORY_IDS = 'deletedDefaultCategoryIds';
-const CATEGORY_SYNC_BACKFILL_KEY = 'categoriesSyncBackfillV1';
+// V2: refresh updatedAt to now so delayed items aren't missed by pull cursors
+const CATEGORY_SYNC_BACKFILL_KEY = 'categoriesSyncBackfillV2';
 
 async function rememberDeletedDefaultCategory(id: string) {
   if (!id.startsWith('cat_')) return;
@@ -55,11 +56,16 @@ export const CategoryRepository = {
   },
   // One-time migration: push all existing categories to the cloud so products
   // can satisfy the FK constraint (Product.categoryId → Category.id) on first sync.
+  // V2: refreshes updatedAt to now so items with old timestamps aren't missed
+  // by other devices whose pull cursor has already advanced past the original date.
   async backfillCategoriesForSync() {
     if (await db.settings.get(CATEGORY_SYNC_BACKFILL_KEY)) return 0;
+    const now = nowIso();
     const categories = await db.categories.toArray();
     for (const category of categories) {
-      await SyncQueueRepository.enqueue({ tableName: 'categories', recordId: category.id, action: 'upsert', payload: category });
+      const payload = { ...category, updatedAt: now };
+      await db.categories.update(category.id, { updatedAt: now });
+      await SyncQueueRepository.enqueue({ tableName: 'categories', recordId: category.id, action: 'upsert', payload });
     }
     await db.settings.put({ key: CATEGORY_SYNC_BACKFILL_KEY, value: 'true', updatedAt: nowIso() });
     return categories.length;
