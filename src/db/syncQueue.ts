@@ -67,4 +67,16 @@ export const SyncQueueRepository = {
       updatedAt: nowIso(),
     });
   },
+
+  // Reset items stuck in 'syncing' state (e.g. after app crash mid-push)
+  async resetStuckSyncing() {
+    const stuck = await db.sync_queue.where('status').equals('syncing').toArray();
+    if (!stuck.length) return 0;
+    await Promise.all(
+      stuck.map((item) =>
+        db.sync_queue.update(item.id, { status: 'pending', updatedAt: nowIso() }),
+      ),
+    );
+    return stuck.length;
+  },
 };

@@ -1,15 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { seedDatabase } from '../db/seed';
 import { CatalogDefaultRepository } from '../db/repositories/CatalogDefaultRepository';
-import { ToastProvider } from '../components/common/Toast';
+import { ToastProvider, useToast } from '../components/common/Toast';
 import { syncMirrorModeToBody } from '../stores/mirrorStore';
 import { useSync } from '../hooks/useSync';
 
+// Runs inside ToastProvider so it can call useToast()
+function SyncManager() {
+  const toast = useToast();
+  const { conflictWarning } = useSync();
+  const lastWarning = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (conflictWarning && conflictWarning !== lastWarning.current) {
+      lastWarning.current = conflictWarning;
+      toast(conflictWarning, 'info');
+    }
+  }, [conflictWarning, toast]);
+
+  return null;
+}
+
 export function AppProviders() {
   const [ready, setReady] = useState(false);
-  useSync();
 
   useEffect(() => {
     syncMirrorModeToBody();
@@ -24,6 +39,7 @@ export function AppProviders() {
 
   return (
     <ToastProvider>
+      <SyncManager />
       <RouterProvider router={router} />
     </ToastProvider>
   );

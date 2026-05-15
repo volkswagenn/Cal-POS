@@ -1,5 +1,6 @@
 import { db } from '../../db/database';
 import { SyncQueueRepository } from '../../db/syncQueue';
+import { nowIso } from '../../utils/date';
 import type { Category, Product, SaleDetail, SyncQueueItem } from '../../types';
 import { apiRequest, hasApiBaseUrl } from './client';
 
@@ -16,6 +17,12 @@ type SyncPullResponse = {
   };
 };
 
+export type PullResult = {
+  syncedAt: string;
+  // Names of local records overridden by a newer cloud version (last-write-wins lost)
+  conflicts: string[];
+};
+
 function getDeviceId() {
   const existing = localStorage.getItem(DEVICE_ID_KEY);
   if (existing) return existing;
@@ -28,6 +35,52 @@ function getDeviceId() {
 function parsePayload(item: SyncQueueItem) {
   if (!item.payloadJson) return undefined;
   return JSON.parse(item.payloadJson);
+}
+
+async function detectConflictsAndCleanQueue(
+  response: SyncPullResponse,
+): Promise<string[]> {
+  const pending = await db.sync_queue
+    .where('status')
+    .anyOf(['pending', 'failed', 'syncing'])
+    .toArray();
+
+  if (!pending.length) return [];
+
+  const pendingByRecord = new Map(pending.map((item) => [item.recordId, item]));
+  const conflicts: string[] = [];
+  const staleIds: string[] = [];
+
+  const checkRecord = (recordId: string, displayName: string, pulledUpdatedAt: string) => {
+    const queued = pendingByRecord.get(recordId);
+    if (!queued) return;
+
+    try {
+      const payload = JSON.parse(queued.payloadJson ?? '{}') as { updatedAt?: string };
+      const queuedAt = payload.updatedAt ? new Date(payload.updatedAt) : null;
+      // Cloud version is same age or newer → our pending edit lost
+      if (!queuedAt || new Date(pulledUpdatedAt) >= queuedAt) {
+        conflicts.push(displayName);
+        staleIds.push(queued.id);
+      }
+    } catch {
+      // unparseable payload — treat as stale to be safe
+      staleIds.push(queued.id);
+    }
+  };
+
+  for (const cat of response.changes.categories) {
+    checkRecord(cat.id, `หมวดหมู่ "${cat.name}"`, cat.updatedAt);
+  }
+  for (const prod of response.changes.products) {
+    checkRecord(prod.id, `สินค้า "${prod.name}"`, prod.updatedAt);
+  }
+
+  if (staleIds.length > 0) {
+    await Promise.all(staleIds.map((id) => SyncQueueRepository.markSynced(id)));
+  }
+
+  return conflicts;
 }
 
 async function applyPullChanges(response: SyncPullResponse) {
@@ -110,19 +163,29 @@ export const syncApi = {
     }
   },
 
-  async pullLatest() {
+  async pullLatest(): Promise<PullResult | null> {
     if (!hasApiBaseUrl || !navigator.onLine) return null;
 
     const since = localStorage.getItem(LAST_SYNC_KEY);
     const query = since ? `?since=${encodeURIComponent(since)}` : '';
     const response = await apiRequest<SyncPullResponse>(`/api/sync/pull${query}`);
+
+    // Detect conflicts before applying (pull overwrites local pending edits)
+    const conflicts = await detectConflictsAndCleanQueue(response);
     await applyPullChanges(response);
     localStorage.setItem(LAST_SYNC_KEY, response.syncedAt);
-    return response;
+
+    return { syncedAt: response.syncedAt, conflicts };
   },
 
-  async syncNow() {
+  async syncNow(): Promise<PullResult | null> {
     await this.pushPending();
     return this.pullLatest();
+  },
+
+  // Full re-sync from cloud (clears since-timestamp, re-fetches everything)
+  async forceFullSync(): Promise<PullResult | null> {
+    localStorage.removeItem(LAST_SYNC_KEY);
+    return this.syncNow();
   },
 };

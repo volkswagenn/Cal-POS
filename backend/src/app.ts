@@ -2,6 +2,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import Fastify from 'fastify';
 import { env } from './config/env.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
@@ -10,6 +11,7 @@ import { productRoutes } from './modules/products/products.routes.js';
 import { reportRoutes } from './modules/reports/reports.routes.js';
 import { saleRoutes } from './modules/sales/sales.routes.js';
 import { syncRoutes } from './modules/sync/sync.routes.js';
+import { syncWsRoute } from './modules/sync/sync.ws.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { backupRoutes } from './modules/backup/backup.routes.js';
 import { scheduleAutoBackup } from './modules/backup/backup.scheduler.js';
@@ -21,6 +23,7 @@ export async function buildApp() {
     throw new Error('CORS wildcard origin is not allowed in production');
   }
 
+  await app.register(websocket);
   await app.register(helmet, { contentSecurityPolicy: false });
 
   await app.register(rateLimit, {
@@ -60,6 +63,7 @@ export async function buildApp() {
   await app.register(productRoutes, { prefix: '/api/products' });
   await app.register(saleRoutes, { prefix: '/api/sales' });
   await app.register(syncRoutes, { prefix: '/api/sync' });
+  await app.register(syncWsRoute, { prefix: '/api/sync' });
   await app.register(reportRoutes, { prefix: '/api/reports' });
   await app.register(backupRoutes, { prefix: '/api/backup' });
 
