@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { syncApi, type PullResult } from './syncApi';
 import { onLocalChange } from './syncSignal';
 
@@ -148,4 +149,29 @@ export function cancelScheduledSync() {
     clearTimeout(backoffTimer);
     backoffTimer = null;
   }
+}
+
+/**
+ * Lightweight React hook — reads scheduler state only.
+ * Safe to call in any component without triggering a second boot sequence.
+ * Does NOT create WebSockets, intervals, or call cancelScheduledSync on unmount.
+ */
+export function useSyncStatus(): SchedulerState & { isOnline: boolean } {
+  const [sched, setSched] = useState<SchedulerState>(getSyncState);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => {
+    const unsub = subscribeSync(setSched);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      unsub();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  return { ...sched, isOnline };
 }

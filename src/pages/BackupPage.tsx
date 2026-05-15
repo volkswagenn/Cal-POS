@@ -1,7 +1,8 @@
-import { ChangeEvent, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle, Cloud, CloudOff, Download, History, RefreshCw, ShieldAlert, Trash2, Upload, Wifi, WifiOff } from 'lucide-react';
-import { useSync } from '../hooks/useSync';
+import { useSyncStatus, requestSync } from '../services/api/syncScheduler';
+import { SyncQueueRepository } from '../db/syncQueue';
 import { UserRepository } from '../db/repositories/UserRepository';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
@@ -190,13 +191,25 @@ export function BackupPage() {
     }
   };
 
-  const { isOnline, canSync, isSyncing, lastSyncError, deadLetterCount, lastSyncedAt, syncNow, resetAndForceSync } = useSync();
+  const { isOnline, isSyncing, lastSyncError, lastSyncedAt } = useSyncStatus();
+  const canSync = isOnline && hasApiBaseUrl;
+  const [deadLetterCount, setDeadLetterCount] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
+
+  // Keep dead-letter count fresh on this page
+  useEffect(() => {
+    if (!hasApiBaseUrl) return;
+    void SyncQueueRepository.countDead().then(setDeadLetterCount);
+  }, [isSyncing, lastSyncedAt]);
+
+  const handleSyncNow = () => requestSync({ immediate: true });
 
   const handleResetAndForceSync = async () => {
     setIsResetting(true);
     try {
-      await resetAndForceSync();
+      await SyncQueueRepository.resetFailed();
+      localStorage.removeItem('calpos_last_sync_at');
+      requestSync({ immediate: true });
     } finally {
       setIsResetting(false);
     }
@@ -472,7 +485,7 @@ export function BackupPage() {
               {/* Action buttons */}
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={syncNow}
+                  onClick={handleSyncNow}
                   disabled={!canSync || isSyncing}
                   className="flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
