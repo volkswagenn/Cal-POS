@@ -5,6 +5,10 @@ type ServerMessage = { type: 'changes'; syncedAt: string } | { type: 'ping' };
 
 interface SyncWebSocketOptions {
   onChanges: () => void;
+  /** Called when the socket opens (after a fresh connect OR a reconnect). */
+  onConnected?: () => void;
+  /** Called when the socket drops (so a fallback poll can take over). */
+  onDisconnected?: () => void;
 }
 
 const MAX_RECONNECT_DELAY = 30_000;
@@ -14,10 +18,19 @@ export class SyncWebSocket {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 1_000;
   private destroyed = false;
+  private wasConnected = false;
   private readonly onChanges: () => void;
+  private readonly onConnected?: () => void;
+  private readonly onDisconnected?: () => void;
 
   constructor(options: SyncWebSocketOptions) {
     this.onChanges = options.onChanges;
+    this.onConnected = options.onConnected;
+    this.onDisconnected = options.onDisconnected;
+  }
+
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 
   connect(): void {
@@ -46,6 +59,10 @@ export class SyncWebSocket {
 
     this.ws.onopen = () => {
       this.reconnectDelay = 1_000;
+      this.wasConnected = true;
+      // Fired on first connect AND every reconnect — caller uses this to
+      // pull any changes missed while the socket was down + retry dead items.
+      this.onConnected?.();
     };
 
     this.ws.onmessage = (event) => {
@@ -58,6 +75,10 @@ export class SyncWebSocket {
     };
 
     this.ws.onclose = () => {
+      if (this.wasConnected) {
+        this.wasConnected = false;
+        this.onDisconnected?.();
+      }
       if (!this.destroyed) this.scheduleReconnect();
     };
 

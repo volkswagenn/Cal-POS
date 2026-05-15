@@ -21,11 +21,8 @@ export type SyncState = {
   lastSyncError: string | null;
   conflictWarning: string | null;
   deadLetterCount: number;
-  lastSyncedAt: string | null;
   syncNow: () => void;
   forceSync: () => void;
-  /** Reset all dead/failed items back to pending, then do a full re-pull from server. */
-  resetAndForceSync: () => Promise<void>;
 };
 
 export function useSync(): SyncState {
@@ -41,10 +38,6 @@ export function useSync(): SyncState {
 
   const syncNow = useCallback(() => requestSync(), []);
   const forceSync = useCallback(() => requestSync({ full: true, immediate: true }), []);
-  const resetAndForceSync = useCallback(async () => {
-    await SyncQueueRepository.resetFailed();
-    requestSync({ full: true, immediate: true });
-  }, []);
 
   // Subscribe to the module-level scheduler (single source of truth).
   useEffect(() => subscribeSync(setScheduler), []);
@@ -79,7 +72,48 @@ export function useSync(): SyncState {
     void CategoryRepository.backfillCategoriesForSync()
       .then(() => ProductRepository.backfillProductsForSync());
 
-    const wsClient = new SyncWebSocket({ onChanges: () => requestSync() });
+    // Fallback poll — runs ONLY while the WebSocket is down. When WS is
+    // connected, real-time push handles everything and we never poll, so the
+    // app doesn't hammer the API during long sessions (the freeze cause).
+    let fallbackPollId: ReturnType<typeof setInterval> | null = null;
+    const FALLBACK_POLL_MS = 30_000;
+
+    const startFallbackPoll = () => {
+      if (fallbackPollId !== null) return;
+      fallbackPollId = setInterval(() => {
+        if (navigator.onLine && !wsClient.isConnected()) requestSync();
+      }, FALLBACK_POLL_MS);
+    };
+    const stopFallbackPoll = () => {
+      if (fallbackPollId !== null) {
+        clearInterval(fallbackPollId);
+        fallbackPollId = null;
+      }
+    };
+
+    // Auto-recover dead/failed sync items. Cheap: only counts the indexed
+    // 'dead' rows; an API call happens only when there's actually something
+    // stuck. Replaces the manual "Reset & Force Sync" button.
+    const retryDeadLetters = async () => {
+      const dead = await SyncQueueRepository.countDead();
+      if (dead > 0) {
+        await SyncQueueRepository.resetFailed();
+        requestSync({ immediate: true });
+      }
+    };
+
+    const wsClient = new SyncWebSocket({
+      onChanges: () => requestSync(),
+      // Fresh connect OR reconnect → pull anything missed while down and
+      // revive stuck items, then stop the fallback poll.
+      onConnected: () => {
+        stopFallbackPoll();
+        requestSync({ immediate: true });
+        void retryDeadLetters();
+      },
+      // Socket dropped → start the low-frequency safety poll until it's back.
+      onDisconnected: () => startFallbackPoll(),
+    });
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -91,6 +125,7 @@ export function useSync(): SyncState {
     const handleOffline = () => {
       setIsOnline(false);
       setCanSync(false);
+      stopFallbackPoll();
     };
 
     window.addEventListener('online', handleOnline);
@@ -99,17 +134,22 @@ export function useSync(): SyncState {
     if (navigator.onLine) {
       wsClient.connect();
       requestSync({ immediate: true });
+      // Until the socket's onopen fires, poll as a safety net.
+      startFallbackPoll();
     }
 
-    // Periodic fallback: sync every 60s in case WebSocket drops.
-    // Keeps positions, products, and users current even without WS notifications.
-    const periodicId = window.setInterval(() => {
-      if (navigator.onLine) requestSync();
-    }, 60_000);
+    // Low-frequency dead-letter safety net (every 5 min). The check is a
+    // cheap indexed count — no API traffic unless items are actually stuck.
+    const deadLetterId = window.setInterval(() => {
+      if (navigator.onLine) void retryDeadLetters();
+    }, 5 * 60_000);
 
-    // Tab becomes visible again (user switches back) → sync immediately
+    // Tab becomes visible again → only sync if WS is down (otherwise the
+    // socket already kept us current; no need to spend an API call).
     const handleVisibilityChange = () => {
-      if (!document.hidden && navigator.onLine) requestSync({ immediate: true });
+      if (!document.hidden && navigator.onLine && !wsClient.isConnected()) {
+        requestSync({ immediate: true });
+      }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -117,7 +157,8 @@ export function useSync(): SyncState {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.clearInterval(periodicId);
+      stopFallbackPoll();
+      window.clearInterval(deadLetterId);
       wsClient.destroy();
       cancelScheduledSync();
     };
@@ -140,9 +181,7 @@ export function useSync(): SyncState {
     lastSyncError: scheduler.lastSyncError,
     conflictWarning,
     deadLetterCount,
-    lastSyncedAt: scheduler.lastSyncedAt,
     syncNow,
     forceSync,
-    resetAndForceSync,
   };
 }
