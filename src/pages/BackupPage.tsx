@@ -1,6 +1,7 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle, Cloud, CloudOff, Download, History, RefreshCw, ShieldAlert, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Cloud, CloudOff, Download, History, RefreshCw, ShieldAlert, Trash2, Upload, Wifi, WifiOff } from 'lucide-react';
+import { useSync } from '../hooks/useSync';
 import { UserRepository } from '../db/repositories/UserRepository';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
@@ -186,6 +187,18 @@ export function BackupPage() {
       toast('ลบ Cloud Backup ไม่สำเร็จ', 'error');
     } finally {
       setIsCloudBusy(false);
+    }
+  };
+
+  const { isOnline, canSync, isSyncing, lastSyncError, deadLetterCount, lastSyncedAt, syncNow, resetAndForceSync } = useSync();
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetAndForceSync = async () => {
+    setIsResetting(true);
+    try {
+      await resetAndForceSync();
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -398,6 +411,92 @@ export function BackupPage() {
             </div>
           </div>
         </Card>
+
+        {/* ── Cloud Sync Status ── */}
+        {hasApiBaseUrl && (
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100">
+                  <RefreshCw size={20} className="text-violet-600" />
+                </div>
+                <div>
+                  <h2 className="font-black text-slate-900">สถานะ Cloud Sync</h2>
+                  <p className="text-xs font-medium text-slate-500">ตรวจสอบและบังคับ sync ข้อมูลระหว่างเครื่องทันที</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {/* Connection status */}
+              <div className={`flex items-center gap-3 rounded-lg border p-3 ${isOnline ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                {isOnline
+                  ? <Wifi size={18} className="shrink-0 text-emerald-600" />
+                  : <WifiOff size={18} className="shrink-0 text-slate-400" />
+                }
+                <span className={`text-sm font-bold ${isOnline ? 'text-emerald-800' : 'text-slate-500'}`}>
+                  {isOnline ? (isSyncing ? 'กำลัง sync...' : 'ออนไลน์ — พร้อม sync') : 'ออฟไลน์'}
+                </span>
+                {isSyncing && <RefreshCw size={15} className="ml-auto animate-spin text-violet-500" />}
+              </div>
+
+              {/* Last synced at */}
+              {lastSyncedAt && (
+                <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
+                  <CheckCircle size={13} className="shrink-0 text-emerald-500" />
+                  sync ล่าสุด: {new Date(lastSyncedAt).toLocaleString('th-TH')}
+                </div>
+              )}
+
+              {/* Dead letter warning */}
+              {deadLetterCount > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                  <div className="flex-1">
+                    <p className="text-sm font-black text-amber-800">มี {deadLetterCount} รายการ sync ไม่สำเร็จ</p>
+                    <p className="mt-0.5 text-xs font-medium text-amber-700">
+                      ข้อมูลยังอยู่ในเครื่องนี้ แต่ยังไม่ได้ส่งขึ้น cloud กดปุ่ม "รีเซ็ต &amp; Force Sync" เพื่อลองใหม่
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Sync error */}
+              {lastSyncError && (
+                <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
+                  <p className="text-xs font-medium text-red-700 break-all">{lastSyncError}</p>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={syncNow}
+                  disabled={!canSync || isSyncing}
+                  className="flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
+                  Sync Now
+                </button>
+                <button
+                  onClick={handleResetAndForceSync}
+                  disabled={!canSync || isSyncing || isResetting}
+                  className="flex items-center justify-center gap-2 rounded-md bg-violet-600 py-2.5 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-60"
+                >
+                  {isResetting || isSyncing
+                    ? <RefreshCw size={15} className="animate-spin" />
+                    : <RefreshCw size={15} />
+                  }
+                  รีเซ็ต &amp; Force Sync
+                </button>
+              </div>
+              <p className="text-xs font-medium text-slate-500 text-center">
+                "รีเซ็ต &amp; Force Sync" จะล้าง cursor และดึงข้อมูลทั้งหมดจาก cloud ใหม่ ใช้เมื่อ sync ค้างหรือข้อมูลไม่ตรงกัน
+              </p>
+            </div>
+          </Card>
+        )}
 
         {/* ── Danger Zone ── */}
         <Card className="overflow-hidden border border-red-200">

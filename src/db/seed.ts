@@ -4,6 +4,7 @@ import { nowIso } from '../utils/date';
 import { sha256, uid } from '../utils/id';
 import { normalizeProductNameFields } from '../utils/productName';
 import { defaultPrinterSettings } from './repositories/PrinterRepository';
+import { SyncQueueRepository } from './syncQueue';
 
 const categorySeeds = [
   ['cat_end5', 'Ending with 5', '#16a34a'],
@@ -150,6 +151,10 @@ export async function seedDatabase() {
     ['printerSettings', JSON.stringify(defaultPrinterSettings)],
   ].map(([key, value]) => ({ key, value, updatedAt: timestamp }));
 
+  // Track products whose names were fixed so we can enqueue them to SyncQueue after
+  // the transaction (SyncQueueRepository writes to db.sync_queue which is not in this transaction).
+  const nameFixedProductIds: string[] = [];
+
   await db.transaction('rw', [db.users, db.categories, db.products, db.settings, db.activity_logs], async () => {
     const deletedDefaultCategoryIds = parseDeletedDefaultCategoryIds((await db.settings.get(deletedDefaultCategorySettingKey))?.value);
     await db.categories.delete('cat_custom');
@@ -176,6 +181,7 @@ export async function seedDatabase() {
       const normalizedProduct = normalizeProductNameFields({ ...product, name: fixedName, displayName: fixedDisplayName });
       if (normalizedProduct.name !== product.name || normalizedProduct.displayName !== product.displayName) {
         await db.products.update(product.id, { name: normalizedProduct.name, displayName: normalizedProduct.displayName, updatedAt: timestamp });
+        nameFixedProductIds.push(product.id);
       }
     }
     if (!(await db.settings.get(productNumericAscSortSettingKey))) {
@@ -220,4 +226,16 @@ export async function seedDatabase() {
       });
     }
   });
+
+  // Enqueue name-fixed products to SyncQueue so the corrected names propagate to cloud.
+  // This runs outside the transaction because SyncQueueRepository writes to db.sync_queue
+  // which was not included in the transaction above.
+  if (nameFixedProductIds.length > 0) {
+    const fixedProducts = await db.products.bulkGet(nameFixedProductIds);
+    for (const product of fixedProducts) {
+      if (product) {
+        await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });
+      }
+    }
+  }
 }

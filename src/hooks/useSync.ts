@@ -21,8 +21,11 @@ export type SyncState = {
   lastSyncError: string | null;
   conflictWarning: string | null;
   deadLetterCount: number;
+  lastSyncedAt: string | null;
   syncNow: () => void;
   forceSync: () => void;
+  /** Reset all dead/failed items back to pending, then do a full re-pull from server. */
+  resetAndForceSync: () => Promise<void>;
 };
 
 export function useSync(): SyncState {
@@ -38,6 +41,10 @@ export function useSync(): SyncState {
 
   const syncNow = useCallback(() => requestSync(), []);
   const forceSync = useCallback(() => requestSync({ full: true, immediate: true }), []);
+  const resetAndForceSync = useCallback(async () => {
+    await SyncQueueRepository.resetFailed();
+    requestSync({ full: true, immediate: true });
+  }, []);
 
   // Subscribe to the module-level scheduler (single source of truth).
   useEffect(() => subscribeSync(setScheduler), []);
@@ -133,7 +140,9 @@ export function useSync(): SyncState {
     lastSyncError: scheduler.lastSyncError,
     conflictWarning,
     deadLetterCount,
+    lastSyncedAt: scheduler.lastSyncedAt,
     syncNow,
     forceSync,
+    resetAndForceSync,
   };
 }
