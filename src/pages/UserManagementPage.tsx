@@ -55,6 +55,10 @@ export function UserManagementPage() {
 
   const savedPositions = useMemo(() => parsePositions(positionSetting), [positionSetting]);
   const positionNames = useMemo(() => savedPositions.map((item) => item.name), [savedPositions]);
+  const defaultCreateRole = useMemo(
+    () => positionNames.find((name) => name !== ADMIN_ROLE) ?? positionNames[0] ?? 'Cashier',
+    [positionNames],
+  );
   const hasPositionChange = JSON.stringify(positionDrafts) !== JSON.stringify(savedPositions);
 
   const activeAdminCount = useMemo(
@@ -85,9 +89,22 @@ export function UserManagementPage() {
     setShowPasswordInModal(false);
     setShowPasswordInForm(false);
     setShowConfirmPasswordInForm(false);
-    setUserForm(emptyUserForm(positionNames[0] ?? 'Cashier'));
+    setUserForm(emptyUserForm(defaultCreateRole));
     setShowUserModal(true);
   };
+
+  useEffect(() => {
+    if (!showUserModal || editingUser) return;
+
+    const clearCreateForm = () => setUserForm(emptyUserForm(defaultCreateRole));
+    const frame = window.requestAnimationFrame(clearCreateForm);
+    const timeout = window.setTimeout(clearCreateForm, 150);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [defaultCreateRole, editingUser, showUserModal]);
 
   const openEditUser = (user: User) => {
     setEditingUser(user);
@@ -373,9 +390,9 @@ export function UserManagementPage() {
       {/* Edit / Create User Modal */}
       {showUserModal && (
         <Modal title={editingUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้'} onClose={() => setShowUserModal(false)}>
-          <form className="space-y-3" onSubmit={saveUser}>
-            <label className="block text-sm font-bold text-slate-700">ชื่อแสดง<input className="mt-1 w-full rounded-md border-slate-300" placeholder="" value={userForm.displayName} onChange={(event) => setUserForm({ ...userForm, displayName: event.target.value })} required autoComplete="off" /></label>
-            <label className="block text-sm font-bold text-slate-700">ชื่อผู้ใช้<input className="mt-1 w-full rounded-md border-slate-300" placeholder="" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} required autoComplete="off" /></label>
+          <form className="space-y-3" onSubmit={saveUser} autoComplete="off">
+            <label className="block text-sm font-bold text-slate-700">ชื่อแสดง<input className="mt-1 w-full rounded-md border-slate-300" placeholder="" value={userForm.displayName} onChange={(event) => setUserForm({ ...userForm, displayName: event.target.value })} required autoComplete="off" name="calpos-new-display-name" /></label>
+            <label className="block text-sm font-bold text-slate-700">ชื่อผู้ใช้<input className="mt-1 w-full rounded-md border-slate-300" placeholder="" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} required autoComplete="new-username" name="calpos-new-username" /></label>
             <div className="block text-sm font-bold text-slate-700">
               รหัสผ่านใหม่{editingUser && <span className="ml-1 text-xs text-slate-400">(เว้นว่างถ้าไม่เปลี่ยน)</span>}
               <div className="relative mt-1">
@@ -386,6 +403,7 @@ export function UserManagementPage() {
                   value={userForm.password}
                   onChange={(event) => setUserForm({ ...userForm, password: event.target.value })}
                   autoComplete="new-password"
+                  name="calpos-new-password"
                   required={!editingUser}
                 />
                 <button
@@ -410,6 +428,7 @@ export function UserManagementPage() {
                     value={userForm.confirmPassword}
                     onChange={(event) => setUserForm({ ...userForm, confirmPassword: event.target.value })}
                     autoComplete="new-password"
+                    name="calpos-confirm-new-password"
                     required={!editingUser || Boolean(userForm.password)}
                   />
                   <button
@@ -454,6 +473,8 @@ export function UserManagementPage() {
                 placeholder="000000"
                 value={userForm.pin}
                 onChange={(e) => setUserForm({ ...userForm, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                autoComplete="off"
+                name="calpos-new-pin"
                 minLength={6}
                 maxLength={6}
                 pattern="\d{6}"
