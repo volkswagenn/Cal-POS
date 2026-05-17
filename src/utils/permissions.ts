@@ -8,6 +8,7 @@ export type PermissionKey =
   | 'users'
   | 'settings'
   | 'backup'
+  | 'reset_data'
   | 'void_bill'
   | 'refund_bill'
   | 'edit_sale_price'
@@ -49,7 +50,13 @@ export const PERMISSION_TREE: PermissionNode[] = [
   { key: 'products', label: 'สินค้า/หมวดหมู่' },
   { key: 'users', label: 'ผู้ใช้' },
   { key: 'settings', label: 'ตั้งค่า' },
-  { key: 'backup', label: 'สำรองข้อมูล' },
+  {
+    key: 'backup',
+    label: 'จัดการข้อมูล',
+    children: [
+      { key: 'reset_data', label: 'รีเซ็ตข้อมูล' },
+    ],
+  },
   { key: 'unlock_mirror', label: 'ปลด Mirror POS' },
 ];
 

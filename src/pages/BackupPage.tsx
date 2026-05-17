@@ -1,6 +1,6 @@
 import { ChangeEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle, Cloud, CloudOff, Download, History, RefreshCw, ShieldAlert, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Cloud, CloudOff, Download, History, Lock, RefreshCw, ShieldAlert, Trash2, Upload } from 'lucide-react';
 import { UserRepository } from '../db/repositories/UserRepository';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
@@ -14,11 +14,16 @@ import { useAuthStore } from '../stores/authStore';
 import { hasApiBaseUrl } from '../services/api/client';
 import { backupApi, type CloudBackup } from '../services/api/backupApi';
 import { downloadBlob } from '../utils/exportFile';
+import { usePermissions } from '../hooks/usePermissions';
 
+type DataTab = 'backup' | 'reset';
 type ClearStep = 'confirm1' | 'confirm2' | 'pin';
 type ClearSalesStep = 'confirm' | 'pin';
 
 export function BackupPage() {
+  const [activeTab, setActiveTab] = useState<DataTab>('backup');
+  const { can } = usePermissions();
+  const canReset = can('reset_data');
   const { data: lastBackupAt, reload: reloadBackupTime } = useAsync(() => SettingsRepository.getSetting('lastBackupAt'), []);
   const { data: cloudBackups, reload: reloadCloudBackups } = useAsync(
     () => hasApiBaseUrl && navigator.onLine ? backupApi.list().then((response) => response.backups) : Promise.resolve([] as CloudBackup[]),
@@ -215,9 +220,28 @@ export function BackupPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <PageHeader title="สำรองข้อมูล" subtitle="จัดการการสำรองและกู้คืนข้อมูลทั้งหมดของระบบ" />
+      <PageHeader title="จัดการข้อมูล" subtitle="สำรอง กู้คืน และจัดการข้อมูลทั้งหมดของระบบ" />
+
+      {/* Tab bar */}
+      <div className="mb-4 inline-grid grid-cols-2 rounded-lg bg-white p-1 shadow-sm">
+        <button
+          className={`flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'backup' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+          onClick={() => setActiveTab('backup')}
+        >
+          <Download size={16} /> สำรองข้อมูล
+        </button>
+        <button
+          className={`flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'reset' ? 'bg-red-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+          onClick={() => setActiveTab('reset')}
+        >
+          <Trash2 size={16} /> รีเซ็ตข้อมูล
+        </button>
+      </div>
 
       <div className="max-w-2xl space-y-4">
+
+        {/* ══ TAB: สำรองข้อมูล ══ */}
+        {activeTab === 'backup' && <>
 
         {/* ── JSON Backup ── */}
         <Card className="overflow-hidden">
@@ -420,6 +444,18 @@ export function BackupPage() {
           </div>
         </Card>
 
+        </> /* end TAB backup */}
+
+        {/* ══ TAB: รีเซ็ตข้อมูล ══ */}
+        {activeTab === 'reset' && (
+          !canReset ? (
+            <Card className="p-8 text-center">
+              <Lock size={36} className="mx-auto mb-3 text-slate-300" />
+              <p className="font-black text-slate-500">ไม่มีสิทธิ์เข้าถึง</p>
+              <p className="mt-1 text-sm font-medium text-slate-400">ตำแหน่งของคุณไม่ได้รับอนุญาตให้รีเซ็ตข้อมูล</p>
+            </Card>
+          ) : <>
+
         {/* ── Danger Zone ── */}
         <Card className="overflow-hidden border border-red-200">
           <div className="border-b border-red-200 bg-red-50 px-5 py-4">
@@ -470,6 +506,10 @@ export function BackupPage() {
             </div>
           </div>
         </Card>
+
+          </> /* end canReset */
+        )}
+
       </div>
 
       {/* ── Confirm Step 1 ── */}

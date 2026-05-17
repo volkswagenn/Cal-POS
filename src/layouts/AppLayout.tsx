@@ -25,7 +25,7 @@ const links: Array<{ to: string; label: string; icon: typeof LayoutDashboard; pe
   { to: '/products', label: 'สินค้า/หมวดหมู่', icon: Boxes, permission: 'products' },
   { to: '/users', label: 'ผู้ใช้', icon: Users, permission: 'users' },
   { to: '/settings', label: 'ตั้งค่า', icon: Settings, permission: 'settings' },
-  { to: '/backup', label: 'สำรองข้อมูล', icon: DatabaseBackup, permission: 'backup' },
+  { to: '/backup', label: 'จัดการข้อมูล', icon: DatabaseBackup, permission: 'backup' },
 ];
 
 function DisabledNavItem({ label, icon: Icon, compact = false }: { label: string; icon: typeof LayoutDashboard; compact?: boolean }) {
@@ -216,7 +216,7 @@ export function AppLayout() {
                 onClick={() => navigate('/backup')}
                 className="rounded bg-white/20 px-3 py-1 hover:bg-white/30"
               >
-                สำรองข้อมูล
+                จัดการข้อมูล
               </button>
               <button
                 type="button"
