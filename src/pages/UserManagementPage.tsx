@@ -459,7 +459,7 @@ export function UserManagementPage() {
                 </div>
                 <div className="font-mono text-sm font-black text-slate-800">
                   {showPasswordInModal
-                    ? (editingUser.passwordPlain ?? <span className="font-normal text-slate-400">ไม่มีข้อมูล</span>)
+                    ? (editingUser.passwordPlain ?? <span className="font-normal text-slate-400">ไม่มีข้อมูลในเครื่องนี้ - ตั้งรหัสผ่านใหม่ได้จากช่องด้านบน</span>)
                     : '••••••••'}
                 </div>
               </div>

@@ -116,12 +116,14 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
     [db.users, db.settings, db.categories, db.products, db.sales, db.sale_items, db.payments, db.discount_logs],
     async () => {
       if (users.length) {
-        const existing = new Map(
-          (await db.users.bulkGet(users.map((u) => u.id)))
-            .filter(Boolean)
-            .map((u) => [u!.id, u!.updatedAt]),
-        );
-        const fresh = users.filter((u) => isNewer(u.updatedAt, existing.get(u.id)));
+        const localUsers = (await db.users.bulkGet(users.map((u) => u.id))).filter(Boolean) as User[];
+        const existing = new Map(localUsers.map((u) => [u.id, u]));
+        const fresh = users
+          .filter((u) => isNewer(u.updatedAt, existing.get(u.id)?.updatedAt))
+          .map((user) => ({
+            ...user,
+            passwordPlain: user.passwordPlain ?? existing.get(user.id)?.passwordPlain,
+          }));
         if (fresh.length) {
           await db.users.bulkPut(fresh);
           mutated = true;
