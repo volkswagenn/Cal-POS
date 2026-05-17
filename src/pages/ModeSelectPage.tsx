@@ -1,11 +1,15 @@
 import { LogOut, Store, Warehouse } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { usePermissions } from '../hooks/usePermissions';
 
 export function ModeSelectPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user)!;
   const logout = useAuthStore((state) => state.logout);
+  const { can, loading } = usePermissions();
+  const canOpenFrontPos = loading || can('pos');
+  const canOpenBackOffice = loading || can('dashboard');
 
   const onLogout = () => {
     logout();
@@ -34,7 +38,8 @@ export function ModeSelectPage() {
           <button
             type="button"
             onClick={() => navigate('/front-pos')}
-            className="group flex min-h-72 flex-col items-center justify-center rounded-lg border border-white/80 bg-white/85 p-8 text-center shadow-panel transition hover:-translate-y-1 hover:bg-white hover:shadow-xl"
+            disabled={!canOpenFrontPos}
+            className="group flex min-h-72 flex-col items-center justify-center rounded-lg border border-white/80 bg-white/85 p-8 text-center shadow-panel transition hover:-translate-y-1 hover:bg-white hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-panel"
           >
             <Store className="mb-6 text-primary-600 transition group-hover:scale-105" size={108} strokeWidth={1.7} />
             <span className="text-4xl font-black text-slate-950">หน้าขาย</span>
@@ -42,7 +47,8 @@ export function ModeSelectPage() {
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="group flex min-h-72 flex-col items-center justify-center rounded-lg border border-white/80 bg-white/85 p-8 text-center shadow-panel transition hover:-translate-y-1 hover:bg-white hover:shadow-xl"
+            disabled={!canOpenBackOffice}
+            className="group flex min-h-72 flex-col items-center justify-center rounded-lg border border-white/80 bg-white/85 p-8 text-center shadow-panel transition hover:-translate-y-1 hover:bg-white hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-panel"
           >
             <Warehouse className="mb-6 text-amber-600 transition group-hover:scale-105" size={108} strokeWidth={1.7} />
             <span className="text-4xl font-black text-slate-950">หลังบ้าน</span>

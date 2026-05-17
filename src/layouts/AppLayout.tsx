@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { AlertTriangle, Boxes, ClipboardList, DatabaseBackup, History, LayoutDashboard, LogOut, Menu, Printer, Send, Settings, Store, Users, Warehouse, X } from 'lucide-react';
+import { AlertTriangle, Boxes, ClipboardList, DatabaseBackup, FileUp, History, LayoutDashboard, LogOut, Menu, Printer, Send, Settings, Store, Users, Warehouse, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { usePermissions } from '../hooks/usePermissions';
@@ -21,6 +21,7 @@ const links: Array<{ to: string; label: string; icon: typeof LayoutDashboard; pe
   { to: '/pos', label: 'ขายสินค้า', icon: ClipboardList, permission: 'pos' },
   { to: '/bills', label: 'ประวัติบิล', icon: History, permission: 'bill_history' },
   { to: '/send-report', label: 'ส่งรายงาน', icon: Send, permission: 'send_report' },
+  { to: '/import-data', label: 'นำเข้าข้อมูล', icon: FileUp, permission: 'import_data' },
   { to: '/products', label: 'สินค้า/หมวดหมู่', icon: Boxes, permission: 'products' },
   { to: '/users', label: 'ผู้ใช้', icon: Users, permission: 'users' },
   { to: '/settings', label: 'ตั้งค่า', icon: Settings, permission: 'settings' },
@@ -194,7 +195,8 @@ export function AppLayout() {
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-1 rounded-md bg-primary-600 px-3 py-2 text-xs font-black text-white hover:bg-primary-700"
+            disabled={!can('dashboard')}
+            className="flex items-center gap-1 rounded-md bg-primary-600 px-3 py-2 text-xs font-black text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
           >
             <Warehouse size={17} /> หลังบ้าน
           </button>

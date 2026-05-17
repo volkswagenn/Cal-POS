@@ -16,6 +16,12 @@ import { GeneralSettingsPage } from '../pages/GeneralSettingsPage';
 import { PaymentSettingsPage } from '../pages/PaymentSettingsPage';
 import { MirrorPosLayout } from '../layouts/MirrorPosLayout';
 import { RequireAuth } from '../features/auth/RequireAuth';
+import { RequirePermission } from '../features/auth/RequirePermission';
+import type { PermissionKey } from '../utils/permissions';
+
+function withPermission(permission: PermissionKey, element: JSX.Element) {
+  return <RequirePermission permission={permission}>{element}</RequirePermission>;
+}
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -23,7 +29,9 @@ export const router = createBrowserRouter([
     path: '/mirror-pos',
     element: (
       <RequireAuth>
-        <MirrorPosLayout />
+        <RequirePermission permission="pos">
+          <MirrorPosLayout />
+        </RequirePermission>
       </RequireAuth>
     ),
     children: [
@@ -42,7 +50,9 @@ export const router = createBrowserRouter([
     path: '/front-pos',
     element: (
       <RequireAuth>
-        <FrontPosLayout />
+        <RequirePermission permission="pos">
+          <FrontPosLayout />
+        </RequirePermission>
       </RequireAuth>
     ),
     children: [
@@ -58,18 +68,18 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Navigate to="/select" replace /> },
-      { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'pos', element: <PosPage /> },
-      { path: 'bills', element: <BillHistoryPage /> },
-      { path: 'send-report', element: <SendReportPage /> },
-      { path: 'import-data', element: <Navigate to="/" replace /> },
-      { path: 'products', element: <ProductManagementPage /> },
+      { path: 'dashboard', element: withPermission('dashboard', <DashboardPage />) },
+      { path: 'pos', element: withPermission('pos', <PosPage />) },
+      { path: 'bills', element: withPermission('bill_history', <BillHistoryPage />) },
+      { path: 'send-report', element: withPermission('send_report', <SendReportPage />) },
+      { path: 'import-data', element: withPermission('import_data', <ImportDataPage />) },
+      { path: 'products', element: withPermission('products', <ProductManagementPage />) },
       { path: 'categories', element: <Navigate to="/products" replace /> },
-      { path: 'users', element: <UserManagementPage /> },
-      { path: 'settings', element: <SettingsPage /> },
+      { path: 'users', element: withPermission('users', <UserManagementPage />) },
+      { path: 'settings', element: withPermission('settings', <SettingsPage />) },
       { path: 'general-settings', element: <Navigate to="/settings?tab=general" replace /> },
       { path: 'payment-settings', element: <Navigate to="/settings?tab=payment" replace /> },
-      { path: 'backup', element: <BackupPage /> },
+      { path: 'backup', element: withPermission('backup', <BackupPage />) },
     ],
   },
 ]);

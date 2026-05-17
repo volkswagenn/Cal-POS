@@ -4,10 +4,12 @@ import { useAuthStore } from '../stores/authStore';
 import { useTapCounter } from '../hooks/useTapCounter';
 import { enableMirrorMode } from '../stores/mirrorStore';
 import { NotificationBell } from '../components/common/NotificationBell';
+import { usePermissions } from '../hooks/usePermissions';
 
 export function FrontPosLayout() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user)!;
+  const { can } = usePermissions();
   const { tap: tapLogo, count: tapLogoCount } = useTapCounter(4, () => {
     enableMirrorMode();
     navigate('/mirror-pos');
@@ -40,7 +42,8 @@ export function FrontPosLayout() {
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="flex min-w-20 flex-col items-center justify-center gap-0.5 rounded-md px-3 text-xs font-black hover:bg-primary-700"
+            disabled={!can('dashboard')}
+            className="flex min-w-20 flex-col items-center justify-center gap-0.5 rounded-md px-3 text-xs font-black hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Warehouse size={18} /> หลังบ้าน
           </button>
