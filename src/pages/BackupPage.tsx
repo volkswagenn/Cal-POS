@@ -38,7 +38,21 @@ export function BackupPage() {
   const [isCloudBusy, setIsCloudBusy] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
+  const currentUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+
+  const validateCurrentAdminPin = async (pin: string) => {
+    if (currentUser?.role !== 'Admin') {
+      return 'การดำเนินการนี้ทำได้เฉพาะบัญชีตำแหน่ง Admin เท่านั้น';
+    }
+
+    const matched = await UserRepository.loginByPin(pin);
+    if (!matched || matched.id !== currentUser.id || matched.role !== 'Admin') {
+      return 'PIN ต้องตรงกับบัญชี Admin ที่กำลังเข้าสู่ระบบอยู่';
+    }
+
+    return '';
+  };
 
   const exportData = async () => {
     try {
@@ -83,9 +97,9 @@ export function BackupPage() {
     setClearAllPinError('');
     setIsClearing(true);
     try {
-      const admin = await UserRepository.loginByPin(clearAllPin);
-      if (!admin || admin.role !== 'Admin') {
-        setClearAllPinError('PIN ไม่ถูกต้อง');
+      const adminPinError = await validateCurrentAdminPin(clearAllPin);
+      if (adminPinError) {
+        setClearAllPinError(adminPinError);
         setIsClearing(false);
         return;
       }
@@ -122,6 +136,13 @@ export function BackupPage() {
     setIsClearingSales(true);
     setSalesPinError('');
     try {
+      const adminPinError = await validateCurrentAdminPin(salesPin);
+      if (adminPinError) {
+        setSalesPinError(adminPinError);
+        setIsClearingSales(false);
+        return;
+      }
+
       if (hasApiBaseUrl && navigator.onLine) {
         await backupApi.clearSalesHistory(salesPin);
       }
@@ -131,7 +152,7 @@ export function BackupPage() {
       setSalesPin('');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '';
-      setSalesPinError(msg.includes('PIN') ? 'PIN ไม่ถูกต้อง' : 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+      setSalesPinError(msg.includes('Admin') || msg.includes('PIN') ? 'ต้องใช้บัญชี Admin ที่กำลังเข้าสู่ระบบและ PIN ของบัญชีนั้นเท่านั้น' : 'เกิดข้อผิดพลาด กรุณาลองใหม่');
     } finally {
       setIsClearingSales(false);
     }
@@ -421,7 +442,7 @@ export function BackupPage() {
               <p className="mb-3 text-xs font-medium text-orange-700">
                 ลบเฉพาะรายการขาย รายการสินค้า การชำระเงิน และส่วนลดทั้งหมด
                 <br />สินค้า หมวดหมู่ ผู้ใช้ และการตั้งค่า<span className="font-black">จะไม่ถูกลบ</span>
-                <br />ต้องยืนยัน PIN ของ Admin เพื่อดำเนินการ
+                <br />ดำเนินการได้เฉพาะบัญชีตำแหน่ง Admin และต้องยืนยันด้วย PIN ของบัญชีนั้น
               </p>
               <button
                 onClick={() => { setSalesPin(''); setSalesPinError(''); setClearSalesStep('confirm'); }}
@@ -517,15 +538,16 @@ export function BackupPage() {
 
       {/* ── Confirm Step PIN ── */}
       {clearStep === 'pin' && (
-        <Modal title="ใส่ PIN Admin เพื่อยืนยัน" onClose={() => setClearStep(null)}>
+        <Modal title="บัญชี Admin เท่านั้น" onClose={() => setClearStep(null)}>
           <div className="space-y-4">
             <div className="rounded-lg border-2 border-red-400 bg-red-50 p-4 text-center">
               <Trash2 size={32} className="mx-auto mb-2 text-red-600" />
               <p className="font-black text-red-900">ล้างข้อมูลทั้งหมดและรีเซ็ตระบบ</p>
               <p className="mt-1 text-sm font-medium text-red-700">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+              <p className="mt-2 text-xs font-black text-red-800">ต้องเข้าสู่ระบบด้วยบัญชีตำแหน่ง Admin และใช้ PIN ของบัญชีนั้นเท่านั้น</p>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN Admin (6 หลัก)</label>
+              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN ของบัญชี Admin ที่กำลังเข้าสู่ระบบ (6 หลัก)</label>
               <input
                 ref={clearAllPinRef}
                 type="password"
@@ -604,15 +626,16 @@ export function BackupPage() {
 
       {/* ── Clear Sales PIN ── */}
       {clearSalesStep === 'pin' && (
-        <Modal title="ใส่ PIN Admin เพื่อยืนยัน" onClose={() => setClearSalesStep(null)}>
+        <Modal title="บัญชี Admin เท่านั้น" onClose={() => setClearSalesStep(null)}>
           <div className="space-y-4">
             <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4 text-center">
               <History size={32} className="mx-auto mb-2 text-orange-600" />
               <p className="font-black text-orange-900">ล้างประวัติการขายทั้งหมด</p>
               <p className="mt-1 text-sm font-medium text-orange-700">การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+              <p className="mt-2 text-xs font-black text-orange-800">ต้องเข้าสู่ระบบด้วยบัญชีตำแหน่ง Admin และใช้ PIN ของบัญชีนั้นเท่านั้น</p>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN Admin (6 หลัก)</label>
+              <label className="mb-1.5 block text-sm font-black text-slate-700">PIN ของบัญชี Admin ที่กำลังเข้าสู่ระบบ (6 หลัก)</label>
               <input
                 ref={salesPinRef}
                 type="password"

@@ -137,7 +137,7 @@ export async function saleRoutes(app: FastifyInstance) {
       where: { shopId: request.user.shopId, id: request.user.sub, role: { in: ['admin', 'Admin'] }, isActive: true },
     });
     if (!admin || admin.pin !== adminPin) {
-      return reply.code(403).send({ message: 'PIN ไม่ถูกต้อง' });
+      return reply.code(403).send({ message: 'ต้องใช้บัญชี Admin ที่กำลังเข้าสู่ระบบและ PIN ของบัญชีนั้นเท่านั้น' });
     }
 
     const { count } = await prisma.$transaction(async (tx) => {
