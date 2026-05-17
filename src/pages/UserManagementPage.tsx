@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
@@ -10,10 +10,22 @@ import { useAsync } from '../hooks/useAsync';
 import { useAuthStore } from '../stores/authStore';
 import type { Role, User } from '../types';
 import { useToast } from '../components/common/Toast';
-import { defaultPositions, parsePositions, permissionOptions, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
+import { defaultPositions, parsePositions, PERMISSION_TREE, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
 import { requestSync } from '../services/api/syncScheduler';
 
 const ADMIN_ROLE = 'Admin';
+
+function IndeterminateCheckbox({
+  indeterminate,
+  className,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { indeterminate: boolean }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return <input type="checkbox" ref={ref} className={className} {...props} />;
+}
 
 type UserTab = 'users' | 'positions';
 type UserForm = {
@@ -210,6 +222,24 @@ export function UserManagementPage() {
     }));
   };
 
+  // Toggle parent: checking adds parent + all children; unchecking removes parent + all children
+  const toggleParentPermission = (positionName: string, parentKey: PermissionKey, childKeys: PermissionKey[]) => {
+    setPositionDrafts((positions) => positions.map((position) => {
+      if (position.name !== positionName) return position;
+      const hasParent = position.permissions.includes(parentKey);
+      if (hasParent) {
+        return {
+          ...position,
+          permissions: position.permissions.filter((p) => p !== parentKey && !childKeys.includes(p)),
+        };
+      }
+      return {
+        ...position,
+        permissions: [...new Set([...position.permissions, parentKey, ...childKeys])],
+      };
+    }));
+  };
+
   const addPosition = () => {
     const name = newPositionName.trim();
     if (!name) return;
@@ -367,18 +397,55 @@ export function UserManagementPage() {
                       <Trash2 size={18} />
                     </button>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {permissionOptions.map((permission) => (
-                      <label key={permission.key} className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
-                        <input
-                          type="checkbox"
-                          className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                          checked={position.permissions.includes(permission.key)}
-                          onChange={() => togglePermission(position.name, permission.key)}
-                        />
-                        {permission.label}
-                      </label>
-                    ))}
+                  <div className="space-y-1.5">
+                    {PERMISSION_TREE.map((node) => {
+                      const parentChecked = position.permissions.includes(node.key);
+                      const childKeys = node.children?.map((c) => c.key) ?? [];
+                      const checkedChildCount = childKeys.filter((k) => position.permissions.includes(k)).length;
+                      const isIndeterminate = parentChecked && childKeys.length > 0 && checkedChildCount > 0 && checkedChildCount < childKeys.length;
+
+                      return (
+                        <div key={node.key} className="overflow-hidden rounded-md border border-slate-200">
+                          {/* Parent row — menu-level permission */}
+                          <label className="flex cursor-pointer items-center gap-2 bg-slate-50 px-3 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100">
+                            <IndeterminateCheckbox
+                              className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                              indeterminate={isIndeterminate}
+                              checked={parentChecked}
+                              onChange={() => toggleParentPermission(position.name, node.key, childKeys)}
+                            />
+                            <span className="flex-1">{node.label}</span>
+                            {childKeys.length > 0 && (
+                              <span className="text-xs font-normal text-slate-400">
+                                {checkedChildCount > 0 ? `${checkedChildCount}/${childKeys.length}` : ''}
+                              </span>
+                            )}
+                          </label>
+
+                          {/* Child rows — tab/action-level permissions */}
+                          {node.children && node.children.length > 0 && (
+                            <div className={`border-t border-slate-100 transition-opacity ${!parentChecked ? 'pointer-events-none opacity-40' : ''}`}>
+                              {node.children.map((child, idx) => (
+                                <label
+                                  key={child.key}
+                                  className={`flex cursor-pointer items-center gap-2 py-2 pl-8 pr-3 text-sm font-medium text-slate-700 hover:bg-slate-50 ${idx < node.children!.length - 1 ? 'border-b border-slate-100' : ''}`}
+                                >
+                                  <span className="select-none text-slate-300">└</span>
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                    checked={position.permissions.includes(child.key)}
+                                    disabled={!parentChecked}
+                                    onChange={() => togglePermission(position.name, child.key)}
+                                  />
+                                  {child.label}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </Card>
               );

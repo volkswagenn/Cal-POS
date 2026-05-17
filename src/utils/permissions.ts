@@ -18,27 +18,55 @@ export type PositionConfig = {
   permissions: PermissionKey[];
 };
 
-export const positionSettingKey = 'userPositions';
+export type PermissionLeaf = { key: PermissionKey; label: string };
 
-export const permissionOptions: Array<{ key: PermissionKey; label: string }> = [
+export type PermissionNode = PermissionLeaf & {
+  children?: PermissionLeaf[];
+};
+
+// Hierarchical permission tree — menu = parent, tab-actions = children
+// Checking a parent auto-checks all children; unchecking parent removes all children too.
+// Children are only effective when their parent menu is also granted.
+export const PERMISSION_TREE: PermissionNode[] = [
   { key: 'dashboard', label: 'แดชบอร์ด' },
-  { key: 'pos', label: 'ขายสินค้า' },
-  { key: 'bill_history', label: 'ประวัติบิล' },
+  {
+    key: 'pos',
+    label: 'ขายสินค้า',
+    children: [
+      { key: 'edit_sale_price', label: 'แก้ไขราคาหน้าขาย' },
+    ],
+  },
+  {
+    key: 'bill_history',
+    label: 'ประวัติบิล',
+    children: [
+      { key: 'void_bill', label: 'Void bill' },
+      { key: 'refund_bill', label: 'Refund bill' },
+    ],
+  },
   { key: 'send_report', label: 'ส่งรายงาน' },
   { key: 'import_data', label: 'นำเข้าข้อมูล' },
   { key: 'products', label: 'สินค้า/หมวดหมู่' },
   { key: 'users', label: 'ผู้ใช้' },
   { key: 'settings', label: 'ตั้งค่า' },
   { key: 'backup', label: 'สำรองข้อมูล' },
-  { key: 'void_bill', label: 'Void bill' },
-  { key: 'refund_bill', label: 'Refund bill' },
-  { key: 'edit_sale_price', label: 'แก้ไขราคาหน้าขาย' },
   { key: 'unlock_mirror', label: 'ปลด Mirror POS' },
 ];
 
+// Flat list derived from tree — used for validation in parsePositions
+export const permissionOptions: PermissionLeaf[] = PERMISSION_TREE.flatMap((node) => [
+  { key: node.key, label: node.label },
+  ...(node.children ?? []),
+]);
+
+export const positionSettingKey = 'userPositions';
+
 export const defaultPositions: PositionConfig[] = [
   { name: 'Admin', permissions: permissionOptions.map((p) => p.key) },
-  { name: 'Manager', permissions: ['dashboard', 'pos', 'bill_history', 'products', 'void_bill', 'edit_sale_price'] },
+  {
+    name: 'Manager',
+    permissions: ['dashboard', 'pos', 'edit_sale_price', 'bill_history', 'void_bill', 'products'],
+  },
   { name: 'Cashier', permissions: ['pos', 'bill_history'] },
 ];
 
@@ -51,7 +79,9 @@ export function parsePositions(value?: string | null): PositionConfig[] {
       .map((item) => ({
         name: item.name,
         permissions: Array.isArray(item.permissions)
-          ? item.permissions.filter((permission: unknown): permission is PermissionKey => permissionOptions.some((option) => option.key === permission))
+          ? item.permissions.filter((permission: unknown): permission is PermissionKey =>
+              permissionOptions.some((option) => option.key === permission),
+            )
           : [],
       }));
     return valid.length ? valid : defaultPositions;
