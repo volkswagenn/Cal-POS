@@ -374,16 +374,18 @@ export function UserManagementPage() {
       {showUserModal && (
         <Modal title={editingUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้'} onClose={() => setShowUserModal(false)}>
           <form className="space-y-3" onSubmit={saveUser}>
-            <label className="block text-sm font-bold text-slate-700">ชื่อแสดง<input className="mt-1 w-full rounded-md border-slate-300" value={userForm.displayName} onChange={(event) => setUserForm({ ...userForm, displayName: event.target.value })} required /></label>
-            <label className="block text-sm font-bold text-slate-700">ชื่อผู้ใช้<input className="mt-1 w-full rounded-md border-slate-300" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} required /></label>
+            <label className="block text-sm font-bold text-slate-700">ชื่อแสดง<input className="mt-1 w-full rounded-md border-slate-300" placeholder="" value={userForm.displayName} onChange={(event) => setUserForm({ ...userForm, displayName: event.target.value })} required autoComplete="off" /></label>
+            <label className="block text-sm font-bold text-slate-700">ชื่อผู้ใช้<input className="mt-1 w-full rounded-md border-slate-300" placeholder="" value={userForm.username} onChange={(event) => setUserForm({ ...userForm, username: event.target.value })} required autoComplete="off" /></label>
             <div className="block text-sm font-bold text-slate-700">
               รหัสผ่านใหม่{editingUser && <span className="ml-1 text-xs text-slate-400">(เว้นว่างถ้าไม่เปลี่ยน)</span>}
               <div className="relative mt-1">
                 <input
                   type={showPasswordInForm ? 'text' : 'password'}
                   className="w-full rounded-md border-slate-300 pr-10"
+                  placeholder=""
                   value={userForm.password}
                   onChange={(event) => setUserForm({ ...userForm, password: event.target.value })}
+                  autoComplete="new-password"
                   required={!editingUser}
                 />
                 <button
@@ -404,8 +406,10 @@ export function UserManagementPage() {
                   <input
                     type={showConfirmPasswordInForm ? 'text' : 'password'}
                     className={`w-full rounded-md pr-10 ${userForm.confirmPassword && userForm.password !== userForm.confirmPassword ? 'border-red-400 focus:ring-red-200' : 'border-slate-300'}`}
+                    placeholder=""
                     value={userForm.confirmPassword}
                     onChange={(event) => setUserForm({ ...userForm, confirmPassword: event.target.value })}
+                    autoComplete="new-password"
                     required={!editingUser || Boolean(userForm.password)}
                   />
                   <button
@@ -447,6 +451,7 @@ export function UserManagementPage() {
               <input
                 inputMode="numeric"
                 className="mt-1 w-full rounded-md border-slate-300 text-center text-xl font-black tracking-widest"
+                placeholder="000000"
                 value={userForm.pin}
                 onChange={(e) => setUserForm({ ...userForm, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
                 minLength={6}
