@@ -71,7 +71,9 @@ export function detectHierarchyConflicts(
 
 // sync hierarchy กับ positions ที่มีอยู่:
 // - ลบ role ที่ถูก delete ออก
-// - เพิ่ม role ใหม่ต่อท้าย (rank ต่ำสุด)
+// - เพิ่ม role ใหม่ที่ index 0 (rank ต่ำสุด)
+// - ครั้งแรก (ยังไม่มี hierarchy) → reverse เพื่อให้ position ที่นิยาม
+//   ก่อน (senior กว่า) ได้ rank สูงกว่า ตามธรรมเนียม [Admin, Manager, Cashier]
 export function syncHierarchyWithPositions(
   hierarchy: string[],
   positionNames: string[],
@@ -79,5 +81,8 @@ export function syncHierarchyWithPositions(
   const nonAdmin = positionNames.filter((p) => p !== 'Admin');
   const kept = hierarchy.filter((r) => nonAdmin.includes(r));
   const added = nonAdmin.filter((p) => !kept.includes(p));
-  return [...kept, ...added];
+  if (kept.length === 0) {
+    return [...added].reverse();
+  }
+  return [...added, ...kept];
 }
