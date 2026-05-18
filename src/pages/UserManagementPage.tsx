@@ -11,13 +11,13 @@ import { useAsync } from '../hooks/useAsync';
 import { useAuthStore } from '../stores/authStore';
 import type { Role, User } from '../types';
 import { useToast } from '../components/common/Toast';
-import { defaultPositions, parsePositions, PERMISSION_TREE, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
+import { defaultPositions, hasPermission, parsePositions, PERMISSION_TREE, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
 import { requestSync } from '../services/api/syncScheduler';
 import { LOGIN_SECURITY_STATE_KEY, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
 
 const ADMIN_ROLE = 'Admin';
 const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
-const adminManagedPermissionKeys: PermissionKey[] = ['reset_data', 'apply_discount'];
+const adminManagedPermissionKeys: PermissionKey[] = ['reset_data', 'apply_discount', 'unblock_user'];
 
 function IndeterminateCheckbox({
   indeterminate,
@@ -69,6 +69,7 @@ export function UserManagementPage() {
   const toast = useToast();
   const currentUser = useAuthStore((state) => state.user);
   const isCurrentUserAdmin = currentUser?.role === ADMIN_ROLE;
+  const canBlockUsers = isCurrentUserAdmin || hasPermission(currentUser?.role, savedPositions, 'unblock_user');
 
   const savedPositions = useMemo(() => parsePositions(positionSetting), [positionSetting]);
   const loginSecurityState = useMemo(() => parseLoginSecurityState(loginSecurityStateSetting), [loginSecurityStateSetting]);
@@ -407,9 +408,13 @@ export function UserManagementPage() {
                       </td>
                       <td>
                         {isUserLoginBlocked(user.id, loginSecurityState) ? (
-                          <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-black text-red-600">ถูกบล็อก</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-xs font-black text-red-600">
+                            <Lock size={11} /> ถูกบล็อก
+                          </span>
                         ) : (
-                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">ปกติ</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">
+                            <Unlock size={11} /> ปกติ
+                          </span>
                         )}
                       </td>
                       <td className="p-3">
@@ -425,14 +430,16 @@ export function UserManagementPage() {
                           >
                             {user.isActive ? <Eye size={16} /> : <EyeOff size={16} />}
                           </button>
-                          <button
-                            className={`rounded-md p-2 ${isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200' : 'bg-red-50 text-red-600 ring-1 ring-red-100 hover:bg-red-100'}`}
-                            onClick={() => handleToggleLoginBlocked(user)}
-                            aria-label={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อก login' : 'บล็อก login'}
-                            title={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อกการลงชื่อเข้าใช้' : 'บล็อกการลงชื่อเข้าใช้'}
-                          >
-                            {isUserLoginBlocked(user.id, loginSecurityState) ? <Unlock size={16} /> : <Lock size={16} />}
-                          </button>
+                          {canBlockUsers && (
+                            <button
+                              className={`rounded-md p-2 ${isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-red-100 text-red-700 ring-1 ring-red-200 hover:bg-red-200' : 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 hover:bg-emerald-100'}`}
+                              onClick={() => handleToggleLoginBlocked(user)}
+                              aria-label={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อก login' : 'บล็อก login'}
+                              title={isUserLoginBlocked(user.id, loginSecurityState) ? 'คลิกเพื่อปลดล็อกการลงชื่อเข้าใช้' : 'คลิกเพื่อบล็อกการลงชื่อเข้าใช้'}
+                            >
+                              {isUserLoginBlocked(user.id, loginSecurityState) ? <Lock size={16} /> : <Unlock size={16} />}
+                            </button>
+                          )}
                           <button
                             className={`rounded-md p-2 ${isLastActiveAdmin(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
                             onClick={() => { if (!isLastActiveAdmin(user)) setConfirmDeleteUser(user); }}

@@ -6,6 +6,7 @@ export type PermissionKey =
   | 'import_data'
   | 'products'
   | 'users'
+  | 'unblock_user'
   | 'settings'
   | 'backup'
   | 'reset_data'
@@ -50,7 +51,13 @@ export const PERMISSION_TREE: PermissionNode[] = [
   { key: 'send_report', label: 'ส่งรายงาน' },
   { key: 'import_data', label: 'นำเข้าข้อมูล' },
   { key: 'products', label: 'สินค้า/หมวดหมู่' },
-  { key: 'users', label: 'ผู้ใช้' },
+  {
+    key: 'users',
+    label: 'ผู้ใช้',
+    children: [
+      { key: 'unblock_user', label: 'บล็อก/ปลดล็อก Login ผู้ใช้' },
+    ],
+  },
   { key: 'settings', label: 'ตั้งค่า' },
   {
     key: 'backup',

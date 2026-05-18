@@ -307,13 +307,13 @@ export function LoginPage() {
             <label className="block text-sm font-bold text-slate-700">ชื่อผู้ใช้
               <div className="mt-1 flex items-center gap-2 rounded-md border border-slate-300 px-3">
                 <UserRound size={18} className="text-slate-400" />
-                <input className="w-full border-0 focus:ring-0" value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
+                <input autoComplete="off" className="w-full border-0 focus:ring-0" value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
               </div>
             </label>
             <label className="block text-sm font-bold text-slate-700">รหัสผ่าน
               <div className="mt-1 flex items-center gap-2 rounded-md border border-slate-300 px-3">
                 <LockKeyhole size={18} className="text-slate-400" />
-                <input type={showPassword ? 'text' : 'password'} className="w-full border-0 focus:ring-0" value={password} onChange={(event) => setPassword(event.target.value)} />
+                <input type={showPassword ? 'text' : 'password'} autoComplete="new-password" className="w-full border-0 focus:ring-0" value={password} onChange={(event) => setPassword(event.target.value)} />
                 <button type="button" className="rounded-md p-1 text-slate-500 hover:bg-slate-100" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}>
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
