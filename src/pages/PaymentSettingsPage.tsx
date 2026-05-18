@@ -80,7 +80,7 @@ export function PaymentSettingsPage() {
             <button
               onClick={save}
               disabled={!isDirty}
-              className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white ${isDirty ? 'bg-primary-600 hover:bg-primary-700' : 'bg-slate-300'}`}
+              className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white ${isDirty ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300'}`}
             >
               <Save size={16} /> บันทึก
             </button>

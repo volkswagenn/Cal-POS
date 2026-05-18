@@ -612,7 +612,7 @@ export function ProductManagementPage() {
             </div>
             <div className="mt-3 flex justify-end">
               <button
-                className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 onClick={() => editingProductId && saveProductDraft(editingProductId)}
                 disabled={!canManageCatalog || !hasProductDraftChange}
               >
@@ -719,7 +719,7 @@ export function ProductManagementPage() {
                   </button>
                   <button
                     type="button"
-                    className="flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 font-black text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                     onClick={saveQuickAddRows}
                     disabled={!canManageCatalog}
                   >
@@ -814,7 +814,7 @@ export function ProductManagementPage() {
                         <td className="p-3 text-right">
                           {isEditing ? (
                             <>
-                              <button className="rounded-md bg-primary-600 p-2 text-white disabled:cursor-not-allowed disabled:bg-slate-300" onClick={() => saveProductDraft(product.id)} disabled={!canManageCatalog || !hasProductDraftChange} aria-label="บันทึกสินค้า">
+                              <button className="rounded-md bg-emerald-600 p-2 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300" onClick={() => saveProductDraft(product.id)} disabled={!canManageCatalog || !hasProductDraftChange} aria-label="บันทึกสินค้า">
                                 <Save size={18} />
                               </button>
                               <button className="ml-2 rounded-md bg-slate-100 p-2 text-slate-700" onClick={cancelEditProduct} aria-label="ยกเลิกแก้ไข">
@@ -875,7 +875,7 @@ export function ProductManagementPage() {
             </div>
             <div className="mt-3 flex justify-end">
               <button
-                className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 onClick={() => saveCategoryDraft(editingCategoryId ?? undefined)}
                 disabled={!canManageCatalog || !hasCategoryDraftChange}
               >
@@ -925,7 +925,7 @@ export function ProductManagementPage() {
                         <td className="p-3 text-right">
                           {isEditing ? (
                             <>
-                              <button className="rounded-md bg-primary-600 p-2 text-white disabled:cursor-not-allowed disabled:bg-slate-300" onClick={() => saveCategoryDraft(category.id)} disabled={!canManageCatalog || !hasCategoryDraftChange} aria-label="บันทึกหมวดหมู่"><Save size={18} /></button>
+                              <button className="rounded-md bg-emerald-600 p-2 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300" onClick={() => saveCategoryDraft(category.id)} disabled={!canManageCatalog || !hasCategoryDraftChange} aria-label="บันทึกหมวดหมู่"><Save size={18} /></button>
                               <button className="ml-2 rounded-md bg-slate-100 p-2 text-slate-700" onClick={cancelEditCategory} aria-label="ยกเลิกแก้ไข"><X size={18} /></button>
                             </>
                           ) : (
@@ -960,7 +960,7 @@ export function ProductManagementPage() {
             <button className="rounded-md bg-slate-800 px-4 py-2 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300" onClick={saveAlphabeticalOrder} disabled={!canManageCatalog}>
               <ArrowDownAZ className="mr-1 inline" size={18} /> Sort ตามตัวอักษร
             </button>
-            <button className="rounded-md bg-primary-600 px-4 py-2 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300" onClick={saveManualOrder} disabled={!canManageCatalog || !hasSortingDraft}>
+            <button className="rounded-md bg-emerald-600 px-4 py-2 font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300" onClick={saveManualOrder} disabled={!canManageCatalog || !hasSortingDraft}>
               <Save className="mr-1 inline" size={18} /> บันทึกการแก้ไข
             </button>
             <div className="self-center text-sm text-slate-500">ลากแถวสินค้าเพื่อเปลี่ยนตำแหน่ง ปุ่มขายในหน้า POS จะเรียงตามลำดับที่บันทึก</div>

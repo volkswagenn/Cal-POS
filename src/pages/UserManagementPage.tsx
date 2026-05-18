@@ -412,7 +412,7 @@ export function UserManagementPage() {
             <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
               <input className="rounded-md border-slate-300" placeholder="ชื่อตำแหน่งใหม่" value={newPositionName} onChange={(event) => setNewPositionName(event.target.value)} />
               <button className="rounded-md bg-primary-600 px-4 py-3 font-black text-white" onClick={addPosition}><Plus className="mr-2 inline" size={18} /> เพิ่มตำแหน่ง</button>
-              <button className={`rounded-md px-4 py-3 font-black text-white ${hasPositionChange ? 'bg-primary-600' : 'bg-slate-300'}`} disabled={!hasPositionChange} onClick={savePositions}>
+              <button className={`rounded-md px-4 py-3 font-black text-white ${hasPositionChange ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300'}`} disabled={!hasPositionChange} onClick={savePositions}>
                 <Save className="mr-2 inline" size={18} /> บันทึกการแก้ไข
               </button>
             </div>
@@ -647,7 +647,7 @@ export function UserManagementPage() {
 
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button type="button" className="rounded-md bg-slate-100 py-3 font-bold text-slate-700" onClick={() => setShowUserModal(false)}>ยกเลิก</button>
-              <button className="rounded-md bg-primary-600 py-3 font-black text-white">บันทึก</button>
+              <button className="rounded-md bg-emerald-600 py-3 font-black text-white hover:bg-emerald-700">บันทึก</button>
             </div>
           </form>
         </Modal>
@@ -684,7 +684,7 @@ export function UserManagementPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
-                className="rounded-md bg-primary-600 py-3 font-black text-white hover:bg-primary-700"
+                className="rounded-md bg-emerald-600 py-3 font-black text-white hover:bg-emerald-700"
                 onClick={() => setPendingTab(null)}
               >
                 กลับไปบันทึก
@@ -715,7 +715,7 @@ export function UserManagementPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <button
-                className="rounded-md bg-primary-600 py-3 font-black text-white hover:bg-primary-700"
+                className="rounded-md bg-emerald-600 py-3 font-black text-white hover:bg-emerald-700"
                 onClick={() => blocker.reset()}
               >
                 กลับไปบันทึก

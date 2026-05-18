@@ -121,7 +121,7 @@ function ItemDiscountModal({
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button className="rounded-md bg-slate-100 py-3 font-bold text-slate-700" onClick={onClose}>ยกเลิก</button>
         <button
-          className="rounded-md bg-primary-600 py-3 font-bold text-white"
+          className="rounded-md bg-emerald-600 py-3 font-bold text-white hover:bg-emerald-700"
           onClick={() => {
             if (mode === 'amount') onSave({ discountAmount: numberValue, discountPercent: 0 });
             else onSave({ discountAmount: 0, discountPercent: Math.min(100, numberValue) });
@@ -174,7 +174,7 @@ function BillDiscountModal({
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button className="rounded-md bg-slate-100 py-3 font-bold text-slate-700" onClick={onClose}>ยกเลิก</button>
-        <button className="rounded-md bg-primary-600 py-3 font-bold text-white" onClick={() => { onSave(numberValue); onClose(); }}>บันทึกส่วนลด</button>
+        <button className="rounded-md bg-emerald-600 py-3 font-bold text-white hover:bg-emerald-700" onClick={() => { onSave(numberValue); onClose(); }}>บันทึกส่วนลด</button>
       </div>
     </Modal>
   );
@@ -215,7 +215,7 @@ function ItemPriceNoteModal({
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button className="rounded-md bg-slate-100 py-3 font-bold text-slate-700" onClick={onClose}>ยกเลิก</button>
         <button
-          className="rounded-md bg-primary-600 py-3 font-bold text-white"
+          className="rounded-md bg-emerald-600 py-3 font-bold text-white hover:bg-emerald-700"
           onClick={() => {
             onSave(isPriceMode ? { price: Math.max(0, Number(price || 0)) } : { note });
             onClose();

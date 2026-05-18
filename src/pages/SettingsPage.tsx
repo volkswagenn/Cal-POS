@@ -795,7 +795,7 @@ export function SettingsPage() {
                 <RotateCcw size={16} /> รีเซ็ตกล่องสินค้า
               </button>
               <button
-                className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white shadow-sm ${hasSaleSettingsChange ? 'bg-primary-600 hover:bg-primary-700' : 'bg-slate-400'}`}
+                className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white shadow-sm ${hasSaleSettingsChange ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-400'}`}
                 onClick={saveSaleSettings}
                 disabled={!hasSaleSettingsChange}
               >
@@ -949,7 +949,7 @@ export function SettingsPage() {
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <button
-                className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white shadow-sm ${hasPrinterSettingsChange ? 'bg-primary-600 hover:bg-primary-700' : 'bg-slate-400'}`}
+                className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white shadow-sm ${hasPrinterSettingsChange ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-400'}`}
                 onClick={savePrinterSettings}
                 disabled={!hasPrinterSettingsChange}
               >
@@ -1469,7 +1469,7 @@ export function SettingsPage() {
               <button
                 onClick={savePaymentSettings}
                 disabled={!isPaymentDirty}
-                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white ${isPaymentDirty ? 'bg-primary-600 hover:bg-primary-700' : 'bg-slate-300'}`}
+                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white ${isPaymentDirty ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300'}`}
               >
                 <Save size={16} /> บันทึก
               </button>
