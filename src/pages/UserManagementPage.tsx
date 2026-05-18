@@ -692,7 +692,7 @@ export function UserManagementPage() {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="font-black text-slate-950">ลำดับสิทธิ์ตำแหน่ง</h2>
-                <p className="mt-1 text-sm text-slate-500">จัดเรียงตำแหน่งจากระดับ <span className="font-bold">ต่ำสุด (บน)</span> ไป <span className="font-bold">สูงสุด (ล่าง)</span> — ตำแหน่งที่ rank สูงกว่าสามารถจัดการตำแหน่งที่ rank เท่ากันหรือต่ำกว่าได้</p>
+                <p className="mt-1 text-sm text-slate-500">จัดเรียงตำแหน่งจากระดับ <span className="font-bold">สูงสุด (บน)</span> ไป <span className="font-bold">ต่ำสุด (ล่าง)</span> — ตำแหน่งที่ rank สูงกว่าสามารถจัดการตำแหน่งที่ rank เท่ากันหรือต่ำกว่าได้</p>
               </div>
               <button
                 className={`rounded-md px-4 py-3 font-black text-white ${hasHierarchyChange ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300'}`}
@@ -726,33 +726,7 @@ export function UserManagementPage() {
 
           <Card className="overflow-hidden">
             <div className="divide-y divide-slate-100">
-              {hierarchyDrafts.map((role, index) => (
-                <div key={role} className="flex items-center gap-3 px-4 py-3">
-                  <div className="flex flex-col">
-                    <button
-                      className={`rounded p-1 ${index === 0 ? 'cursor-not-allowed text-slate-200' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
-                      disabled={index === 0}
-                      onClick={() => moveHierarchyItem(index, 'up')}
-                      aria-label="เลื่อนขึ้น"
-                    >
-                      <ArrowUp size={14} />
-                    </button>
-                    <button
-                      className={`rounded p-1 ${index === hierarchyDrafts.length - 1 ? 'cursor-not-allowed text-slate-200' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
-                      disabled={index === hierarchyDrafts.length - 1}
-                      onClick={() => moveHierarchyItem(index, 'down')}
-                      aria-label="เลื่อนลง"
-                    >
-                      <ArrowDown size={14} />
-                    </button>
-                  </div>
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-600">
-                    {index + 1}
-                  </div>
-                  <span className="flex-1 font-bold text-slate-800">{role}</span>
-                  <span className="text-xs text-slate-400">rank {index + 1}</span>
-                </div>
-              ))}
+              {/* Admin fixed at top — highest rank */}
               <div className="flex items-center gap-3 bg-primary-50 px-4 py-3">
                 <div className="flex flex-col">
                   <button className="cursor-not-allowed rounded p-1 text-slate-200" disabled><ArrowUp size={14} /></button>
@@ -762,6 +736,39 @@ export function UserManagementPage() {
                 <span className="flex-1 font-bold text-primary-700">Admin</span>
                 <span className="text-xs text-primary-400">สิทธิ์สูงสุด (ตายตัว)</span>
               </div>
+              {/* Render highest rank first (reversed display) */}
+              {[...hierarchyDrafts].reverse().map((role, displayIndex) => {
+                const actualIndex = hierarchyDrafts.length - 1 - displayIndex;
+                const isHighest = actualIndex === hierarchyDrafts.length - 1;
+                const isLowest = actualIndex === 0;
+                return (
+                  <div key={role} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex flex-col">
+                      <button
+                        className={`rounded p-1 ${isHighest ? 'cursor-not-allowed text-slate-200' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                        disabled={isHighest}
+                        onClick={() => moveHierarchyItem(actualIndex, 'down')}
+                        aria-label="เลื่อนขึ้น (เพิ่ม rank)"
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        className={`rounded p-1 ${isLowest ? 'cursor-not-allowed text-slate-200' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                        disabled={isLowest}
+                        onClick={() => moveHierarchyItem(actualIndex, 'up')}
+                        aria-label="เลื่อนลง (ลด rank)"
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                    </div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-600">
+                      {actualIndex + 1}
+                    </div>
+                    <span className="flex-1 font-bold text-slate-800">{role}</span>
+                    <span className="text-xs text-slate-400">rank {actualIndex + 1}</span>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         </div>
