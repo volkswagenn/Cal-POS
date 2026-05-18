@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation } from 'react-router-dom';
-import { CreditCard, MonitorCog, Printer, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
+import { CreditCard, KeyRound, MonitorCog, Printer, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
@@ -23,6 +23,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { getDeviceCode, setDeviceCode, DEVICE_CODE_MAX_LEN } from '../utils/deviceCode';
 import { ALL_PAYMENT_METHODS, PAYMENT_METHODS_SETTING_KEY, parseEnabledPaymentMethods, type PaymentMethodId } from './PaymentSettingsPage';
 import { DISCOUNT_APPROVAL_REQUIRED_KEY } from '../utils/discountApproval';
+import { LOGIN_SECURITY_CONFIG_KEY, defaultLoginSecurityConfig, parseLoginSecurityConfig } from '../utils/loginSecurity';
 
 const sizeOptions = [
   { value: 'small', title: 'เล็ก' },
@@ -43,7 +44,7 @@ const fontLimits = {
 } as const;
 
 type FontTarget = keyof typeof fontPresetPx;
-type SettingsTab = 'sale' | 'printer' | 'general' | 'payment';
+type SettingsTab = 'sale' | 'printer' | 'general' | 'payment' | 'login';
 type PrinterSubTab = 'connection' | 'receipt';
 type ConfirmDialogState = {
   title: string;
@@ -298,6 +299,12 @@ export function SettingsPage() {
   const [showResetCatalogConfirm, setShowResetCatalogConfirm] = useState(false);
   const [isResettingCatalog, setIsResettingCatalog] = useState(false);
   const [isSavingDiscountApproval, setIsSavingDiscountApproval] = useState(false);
+  const savedLoginSecurityConfig = useMemo(
+    () => parseLoginSecurityConfig(settings?.find((setting) => setting.key === LOGIN_SECURITY_CONFIG_KEY)?.value),
+    [settings],
+  );
+  const [draftPasswordMaxAttempts, setDraftPasswordMaxAttempts] = useState(String(defaultLoginSecurityConfig.passwordMaxAttempts));
+  const [draftPinMaxAttempts, setDraftPinMaxAttempts] = useState(String(defaultLoginSecurityConfig.pinMaxAttempts));
 
   const savedProductSize = useMemo(() => settings?.find((setting) => setting.key === 'productButtonSize')?.value ?? 'medium', [settings]);
   const savedDisplayFontSize = useMemo(() => settings?.find((setting) => setting.key === 'productButtonDisplayFontSize')?.value ?? 'medium', [settings]);
@@ -309,6 +316,8 @@ export function SettingsPage() {
   const savedAutoCloseReceiptEnabled = useMemo(() => (settings?.find((setting) => setting.key === 'autoCloseReceiptEnabled')?.value ?? 'false') === 'true', [settings]);
   const savedAutoCloseReceiptSeconds = useMemo(() => settings?.find((setting) => setting.key === 'autoCloseReceiptSeconds')?.value ?? '5', [settings]);
   const savedAllowSalePriceEdit = useMemo(() => (settings?.find((setting) => setting.key === 'allowSalePriceEdit')?.value ?? 'false') === 'true', [settings]);
+  const isLoginSecurityDirty = Number(draftPasswordMaxAttempts) !== savedLoginSecurityConfig.passwordMaxAttempts
+    || Number(draftPinMaxAttempts) !== savedLoginSecurityConfig.pinMaxAttempts;
   const discountApprovalRequired = useMemo(() => (settings?.find((setting) => setting.key === DISCOUNT_APPROVAL_REQUIRED_KEY)?.value ?? 'false') === 'true', [settings]);
   const discountApproverPositions = useMemo(
     () => positions.filter((position) => position.name === 'Admin' || position.permissions.includes('apply_discount')),
@@ -370,7 +379,7 @@ export function SettingsPage() {
     || draftAutoCloseReceiptEnabled !== savedAutoCloseReceiptEnabled
     || draftAutoCloseReceiptSeconds !== savedAutoCloseReceiptSeconds
     || draftAllowSalePriceEdit !== savedAllowSalePriceEdit;
-  const hasUnsavedSettingsChange = hasSaleSettingsChange || hasPrinterSettingsChange;
+  const hasUnsavedSettingsChange = hasSaleSettingsChange || hasPrinterSettingsChange || isLoginSecurityDirty;
   const previewProduct = useMemo(() => {
     return previewProducts?.find((product) => product.id === previewProductId) ?? previewProducts?.find((product) => !product.isOpenPrice) ?? previewProducts?.[0] ?? null;
   }, [previewProducts, previewProductId]);
@@ -397,7 +406,9 @@ export function SettingsPage() {
   const resetAllDraftsToSaved = useCallback(() => {
     resetSaleDraftToSaved();
     resetPrinterDraftToSaved();
-  }, [resetSaleDraftToSaved, resetPrinterDraftToSaved]);
+    setDraftPasswordMaxAttempts(String(savedLoginSecurityConfig.passwordMaxAttempts));
+    setDraftPinMaxAttempts(String(savedLoginSecurityConfig.pinMaxAttempts));
+  }, [resetSaleDraftToSaved, resetPrinterDraftToSaved, savedLoginSecurityConfig.passwordMaxAttempts, savedLoginSecurityConfig.pinMaxAttempts]);
 
   const applyDefaultProductCardSettings = () => {
     setDraftProductSize(defaultProductCardSettings.productSize);
@@ -468,7 +479,13 @@ export function SettingsPage() {
     if (tab === 'printer') { setActiveTab('printer'); setActivePrinterTab('connection'); }
     else if (tab === 'general') setActiveTab('general');
     else if (tab === 'payment') setActiveTab('payment');
+    else if (tab === 'login') setActiveTab('login');
   }, [location.search]);
+
+  useEffect(() => {
+    setDraftPasswordMaxAttempts(String(savedLoginSecurityConfig.passwordMaxAttempts));
+    setDraftPinMaxAttempts(String(savedLoginSecurityConfig.pinMaxAttempts));
+  }, [savedLoginSecurityConfig.passwordMaxAttempts, savedLoginSecurityConfig.pinMaxAttempts]);
 
   useEffect(() => {
     if (savedPaymentSetting !== null) {
@@ -537,6 +554,14 @@ export function SettingsPage() {
     } finally {
       setIsSavingDiscountApproval(false);
     }
+  };
+
+  const saveLoginSecuritySettings = async () => {
+    const passwordMaxAttempts = Math.max(1, Math.floor(Number(draftPasswordMaxAttempts || 1)));
+    const pinMaxAttempts = Math.max(1, Math.floor(Number(draftPinMaxAttempts || 1)));
+    await SettingsRepository.setSetting(LOGIN_SECURITY_CONFIG_KEY, JSON.stringify({ passwordMaxAttempts, pinMaxAttempts }), { sync: true });
+    toast('บันทึกการตั้งค่าการลงชื่อเข้าใช้แล้ว', 'success');
+    reload();
   };
 
   const handleResetCatalog = async () => {
@@ -800,6 +825,9 @@ export function SettingsPage() {
         </button>
         <button className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black ${activeTab === 'payment' ? 'bg-primary-600 text-white' : 'text-slate-600'}`} onClick={() => changeTab('payment')}>
           <CreditCard size={17} /> การชำระเงิน
+        </button>
+        <button className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black ${activeTab === 'login' ? 'bg-primary-600 text-white' : 'text-slate-600'}`} onClick={() => changeTab('login')}>
+          <KeyRound size={17} /> การลงชื่อเข้าใช้
         </button>
         <button className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black ${activeTab === 'general' ? 'bg-primary-600 text-white' : 'text-slate-600'}`} onClick={() => changeTab('general')}>
           <SlidersHorizontal size={17} /> ตั้งค่าทั่วไป
@@ -1524,6 +1552,53 @@ export function SettingsPage() {
                 มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
               </div>
             )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'login' && (
+        <div className="max-w-2xl">
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+              <div>
+                <h2 className="font-black text-slate-900">การลงชื่อเข้าใช้</h2>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">กำหนดจำนวนครั้งที่ใส่รหัสผิดก่อนระบบบล็อกการใช้งาน</p>
+              </div>
+              <button
+                onClick={saveLoginSecuritySettings}
+                disabled={!isLoginSecurityDirty}
+                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black text-white ${isLoginSecurityDirty ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300'}`}
+              >
+                <Save size={16} /> บันทึก
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <label className="block rounded-lg border border-slate-200 p-4">
+                <span className="text-sm font-black text-slate-800">จำนวนครั้งที่ใส่ชื่อผู้ใช้/รหัสผ่านผิด</span>
+                <span className="mt-1 block text-xs font-medium text-slate-500">ผิดครบจำนวนนี้ บัญชีผู้ใช้จะถูกบล็อกและต้องปลดล็อกจากหน้าผู้ใช้</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="mt-3 w-full rounded-md border-slate-300 text-lg font-black"
+                  value={draftPasswordMaxAttempts}
+                  onChange={(event) => setDraftPasswordMaxAttempts(event.target.value)}
+                />
+              </label>
+              <label className="block rounded-lg border border-slate-200 p-4">
+                <span className="text-sm font-black text-slate-800">จำนวนครั้งที่ใส่ PIN ผิด</span>
+                <span className="mt-1 block text-xs font-medium text-slate-500">ผิดครบจำนวนนี้ ระบบจะบล็อก PIN และให้เข้าใช้งานด้วยชื่อผู้ใช้/รหัสผ่านเท่านั้น</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="mt-3 w-full rounded-md border-slate-300 text-lg font-black"
+                  value={draftPinMaxAttempts}
+                  onChange={(event) => setDraftPinMaxAttempts(event.target.value)}
+                />
+              </label>
+              {isLoginSecurityDirty && (
+                <div className="rounded-md bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</div>
+              )}
+            </div>
           </Card>
         </div>
       )}

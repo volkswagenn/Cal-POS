@@ -13,6 +13,7 @@ import type { Role, User } from '../types';
 import { useToast } from '../components/common/Toast';
 import { defaultPositions, parsePositions, PERMISSION_TREE, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
 import { requestSync } from '../services/api/syncScheduler';
+import { LOGIN_SECURITY_STATE_KEY, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
 
 const ADMIN_ROLE = 'Admin';
 const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
@@ -54,6 +55,7 @@ const emptyUserForm = (role: Role): UserForm => ({
 export function UserManagementPage() {
   const { data: users, reload, loading } = useAsync(() => UserRepository.getUsers(), []);
   const { data: positionSetting, reload: reloadPositionSetting } = useAsync(() => SettingsRepository.getSetting(positionSettingKey, JSON.stringify(defaultPositions)), []);
+  const { data: loginSecurityStateSetting, reload: reloadLoginSecurityState } = useAsync(() => SettingsRepository.getSetting(LOGIN_SECURITY_STATE_KEY), []);
   const [activeTab, setActiveTab] = useState<UserTab>('users');
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -69,6 +71,7 @@ export function UserManagementPage() {
   const isCurrentUserAdmin = currentUser?.role === ADMIN_ROLE;
 
   const savedPositions = useMemo(() => parsePositions(positionSetting), [positionSetting]);
+  const loginSecurityState = useMemo(() => parseLoginSecurityState(loginSecurityStateSetting), [loginSecurityStateSetting]);
   const positionNames = useMemo(() => savedPositions.map((item) => item.name), [savedPositions]);
   const defaultCreateRole = useMemo(
     () => positionNames.find((name) => name !== ADMIN_ROLE) ?? positionNames[0] ?? 'Cashier',
@@ -232,6 +235,30 @@ export function UserManagementPage() {
     requestSync({ immediate: true });
   };
 
+  const updateLoginSecurityState = async (state: LoginSecurityState) => {
+    await SettingsRepository.setSetting(LOGIN_SECURITY_STATE_KEY, JSON.stringify(state), { sync: true });
+    reloadLoginSecurityState();
+    requestSync({ immediate: true });
+  };
+
+  const handleToggleLoginBlocked = async (user: User) => {
+    const blocked = isUserLoginBlocked(user.id, loginSecurityState);
+    if (!blocked && isLastActiveAdmin(user)) {
+      toast('ไม่สามารถบล็อกการลงชื่อเข้าใช้ของ Admin คนสุดท้ายได้', 'error');
+      return;
+    }
+    const passwordFailuresByUserId = { ...loginSecurityState.passwordFailuresByUserId };
+    if (blocked) delete passwordFailuresByUserId[user.id];
+    await updateLoginSecurityState({
+      ...loginSecurityState,
+      passwordFailuresByUserId,
+      blockedUserIds: blocked
+        ? loginSecurityState.blockedUserIds.filter((id) => id !== user.id)
+        : [...new Set([...loginSecurityState.blockedUserIds, user.id])],
+    });
+    toast(blocked ? 'ปลดล็อกการลงชื่อเข้าใช้แล้ว' : 'บล็อกการลงชื่อเข้าใช้แล้ว', 'success');
+  };
+
   const handleDeleteUser = async (user: User) => {
     if (isLastActiveAdmin(user)) {
       toast('ไม่สามารถลบ Admin คนสุดท้ายได้', 'error');
@@ -356,6 +383,7 @@ export function UserManagementPage() {
                     <th>ตำแหน่ง</th>
                     <th>PIN</th>
                     <th>สถานะ</th>
+                    <th>บล็อก Login</th>
                     <th className="p-3 text-right">จัดการ</th>
                   </tr>
                 </thead>
@@ -375,6 +403,13 @@ export function UserManagementPage() {
                           {user.isActive ? 'ใช้งาน' : 'ปิด'}
                         </span>
                       </td>
+                      <td>
+                        {isUserLoginBlocked(user.id, loginSecurityState) ? (
+                          <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-black text-red-600">ถูกบล็อก</span>
+                        ) : (
+                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">ปกติ</span>
+                        )}
+                      </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-1.5">
                           <button className="rounded-md bg-primary-50 p-2 text-primary-700 hover:bg-primary-100" onClick={() => openEditUser(user)} aria-label="แก้ไข">
@@ -387,6 +422,14 @@ export function UserManagementPage() {
                             title={isLastActiveAdmin(user) ? 'Admin คนสุดท้าย' : user.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
                           >
                             {user.isActive ? <Eye size={16} /> : <EyeOff size={16} />}
+                          </button>
+                          <button
+                            className={`rounded-md p-2 ${isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}
+                            onClick={() => handleToggleLoginBlocked(user)}
+                            aria-label={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อก login' : 'บล็อก login'}
+                            title={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อกการลงชื่อเข้าใช้' : 'บล็อกการลงชื่อเข้าใช้'}
+                          >
+                            <KeyRound size={16} />
                           </button>
                           <button
                             className={`rounded-md p-2 ${isLastActiveAdmin(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}

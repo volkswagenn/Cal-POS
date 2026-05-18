@@ -7,6 +7,8 @@ import { useToast } from '../components/common/Toast';
 import { authApi } from '../services/api/authApi';
 import { ApiError, hasApiBaseUrl } from '../services/api/client';
 import type { AuthTokens, User } from '../types';
+import { SettingsRepository } from '../db/repositories/SettingsRepository';
+import { LOGIN_SECURITY_CONFIG_KEY, LOGIN_SECURITY_STATE_KEY, isUserLoginBlocked, parseLoginSecurityConfig, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
 
 const RESET_PIN_LENGTH = 6;
 const LOGIN_PIN_LENGTH = 6;
@@ -26,6 +28,55 @@ export function LoginPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
+  const readLoginSecurity = async () => ({
+    config: parseLoginSecurityConfig(await SettingsRepository.getSetting(LOGIN_SECURITY_CONFIG_KEY)),
+    state: parseLoginSecurityState(await SettingsRepository.getSetting(LOGIN_SECURITY_STATE_KEY)),
+  });
+
+  const saveLoginSecurityState = async (state: LoginSecurityState) => {
+    await SettingsRepository.setSetting(LOGIN_SECURITY_STATE_KEY, JSON.stringify(state), { sync: true });
+  };
+
+  const recordPasswordFailure = async (targetUser?: User | null) => {
+    if (!targetUser) return;
+    const { config, state } = await readLoginSecurity();
+    const attempts = (state.passwordFailuresByUserId[targetUser.id] ?? 0) + 1;
+    const blocked = attempts >= config.passwordMaxAttempts;
+    await saveLoginSecurityState({
+      ...state,
+      passwordFailuresByUserId: { ...state.passwordFailuresByUserId, [targetUser.id]: attempts },
+      blockedUserIds: blocked ? [...new Set([...state.blockedUserIds, targetUser.id])] : state.blockedUserIds,
+    });
+    if (blocked) toast(`บัญชี ${targetUser.displayName} ถูกบล็อกจากการใส่รหัสผ่านผิดครบ ${config.passwordMaxAttempts} ครั้ง`, 'error');
+  };
+
+  const clearLoginBlocksAfterPasswordLogin = async (targetUser: User) => {
+    const { state } = await readLoginSecurity();
+    const passwordFailuresByUserId = { ...state.passwordFailuresByUserId };
+    delete passwordFailuresByUserId[targetUser.id];
+    await saveLoginSecurityState({
+      ...state,
+      passwordFailuresByUserId,
+      blockedUserIds: state.blockedUserIds.filter((id) => id !== targetUser.id),
+      pinFailures: 0,
+      pinBlocked: false,
+    });
+  };
+
+  const recordPinFailure = async () => {
+    const { config, state } = await readLoginSecurity();
+    const pinFailures = state.pinFailures + 1;
+    const pinBlocked = pinFailures >= config.pinMaxAttempts;
+    await saveLoginSecurityState({ ...state, pinFailures, pinBlocked });
+    if (pinBlocked) toast('PIN ถูกบล็อกแล้ว กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+  };
+
+  const clearPinFailures = async () => {
+    const { state } = await readLoginSecurity();
+    if (state.pinFailures === 0 && !state.pinBlocked) return;
+    await saveLoginSecurityState({ ...state, pinFailures: 0, pinBlocked: false });
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (mode === 'password' && username.trim().toLowerCase() === 'reset' && password.trim().toLowerCase() === 'reset') {
@@ -37,6 +88,17 @@ export function LoginPage() {
     let user: User | null = null;
     let tokens: AuthTokens | undefined;
     let apiAuthRejected = false;
+    const localUser = mode === 'password' ? await UserRepository.getUserByUsername(username) : null;
+    const { state } = await readLoginSecurity();
+
+    if (mode === 'password' && isUserLoginBlocked(localUser?.id, state)) {
+      toast('บัญชีนี้ถูกบล็อก กรุณาให้ผู้ดูแลปลดล็อกในหน้าผู้ใช้', 'error');
+      return;
+    }
+    if (mode === 'pin' && state.pinBlocked) {
+      toast('PIN ถูกบล็อก กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+      return;
+    }
 
     if (hasApiBaseUrl) {
       try {
@@ -59,9 +121,12 @@ export function LoginPage() {
     }
 
     if (!user) {
+      if (mode === 'password') await recordPasswordFailure(localUser);
       toast('เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล', 'error');
       return;
     }
+
+    if (mode === 'password') await clearLoginBlocksAfterPasswordLogin(user);
 
     if (hasApiBaseUrl && !tokens) {
       toast('เซิร์ฟเวอร์ออฟไลน์ — ใช้งานแบบเครื่องเดียวชั่วคราว ข้อมูลจะไม่ sync', 'error');
@@ -76,6 +141,12 @@ export function LoginPage() {
     const next = pin + digit;
     setPin(next);
     if (next.length === LOGIN_PIN_LENGTH) {
+      const { state } = await readLoginSecurity();
+      if (state.pinBlocked) {
+        setPin('');
+        toast('PIN ถูกบล็อก กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+        return;
+      }
       // auto-submit
       let user: User | null = null;
       let tokens: AuthTokens | undefined;
@@ -95,6 +166,7 @@ export function LoginPage() {
         user = await UserRepository.loginByPin(next);
       }
       if (!user) {
+        await recordPinFailure();
         setPinShake(true);
         setTimeout(() => { setPin(''); setPinShake(false); }, 600);
         toast('PIN ไม่ถูกต้อง', 'error');
@@ -103,6 +175,7 @@ export function LoginPage() {
       if (hasApiBaseUrl && !tokens) {
         toast('เซิร์ฟเวอร์ออฟไลน์ — ใช้งานแบบเครื่องเดียวชั่วคราว ข้อมูลจะไม่ sync', 'error');
       }
+      await clearPinFailures();
       setSession(user, tokens);
       toast(`ยินดีต้อนรับ ${user.displayName}`, 'success');
       navigate('/select');

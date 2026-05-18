@@ -23,6 +23,9 @@ export const UserRepository = {
     const user = await db.users.where('pin').equals(pin.trim()).first();
     return user?.isActive ? user : null;
   },
+  async getUserByUsername(username: string) {
+    return db.users.where('username').equals(username.trim()).first();
+  },
   async getUsers() {
     return db.users.orderBy('username').toArray();
   },
