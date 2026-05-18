@@ -84,7 +84,7 @@ function DiscountApprovalPanel({
     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
       <div className="mb-2">
         <div className="font-black text-amber-900">ต้องอนุมัติส่วนลด</div>
-        <div className="text-xs font-bold text-amber-700">ใส่ PIN ของตำแหน่งที่มีสิทธิ์ “ใส่ส่วนลด”</div>
+        <div className="text-xs font-bold text-amber-700">ใส่ PIN ของตำแหน่งที่มีสิทธิ์ “ใส่ PIN ส่วนลดรายการ/ท้ายบิล”</div>
       </div>
       <div className="mb-2 grid min-h-11 place-items-center rounded-md border border-amber-300 bg-white text-2xl font-black tracking-[0.25em] text-slate-900">
         {pin ? '•'.repeat(pin.length) : <span className="text-sm tracking-normal text-slate-300">PIN 6 หลัก</span>}

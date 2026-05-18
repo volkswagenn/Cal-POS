@@ -526,7 +526,7 @@ export function SettingsPage() {
   const toggleDiscountApprovalRequired = async () => {
     const next = !discountApprovalRequired;
     if (next && nonAdminDiscountApproverPositions.length === 0) {
-      toast('กรุณาเปิดสิทธิ์ “ใส่ส่วนลด” ให้ตำแหน่งอื่นก่อน จึงจะเปิดการอนุมัติส่วนลดได้', 'error');
+      toast('กรุณาเปิดสิทธิ์ “ใส่ PIN ส่วนลดรายการ/ท้ายบิล” ให้ตำแหน่งอื่นก่อน จึงจะเปิดการอนุมัติส่วนลดได้', 'error');
       return;
     }
     setIsSavingDiscountApproval(true);
@@ -1539,7 +1539,7 @@ export function SettingsPage() {
               <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
                 <div>
                   <h3 className="text-sm font-black text-slate-800">การใส่ส่วนลดต้องได้รับอนุญาติ</h3>
-                  <p className="mt-1 text-xs font-medium text-slate-500">เมื่อเปิดใช้งาน ต้องใส่ PIN ผู้ที่มีสิทธิ์ “ใส่ส่วนลด” ทุกครั้งที่บันทึกส่วนลด</p>
+                  <p className="mt-1 text-xs font-medium text-slate-500">เมื่อเปิดใช้งาน ต้องใส่ PIN ผู้ที่มีสิทธิ์ “ใส่ PIN ส่วนลดรายการ/ท้ายบิล” ทุกครั้งที่บันทึกส่วนลด</p>
                 </div>
                 <button
                   type="button"
@@ -1562,7 +1562,7 @@ export function SettingsPage() {
                       </span>
                     ))
                   ) : (
-                    <span className="text-sm font-bold text-slate-400">ยังไม่มีตำแหน่งที่ได้รับสิทธิ์ใส่ส่วนลด</span>
+                    <span className="text-sm font-bold text-slate-400">ยังไม่มีตำแหน่งที่ได้รับสิทธิ์ใส่ PIN ส่วนลดรายการ/ท้ายบิล</span>
                   )}
                 </div>
               </div>

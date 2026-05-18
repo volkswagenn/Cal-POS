@@ -16,6 +16,7 @@ import { requestSync } from '../services/api/syncScheduler';
 
 const ADMIN_ROLE = 'Admin';
 const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
+const adminManagedPermissionKeys: PermissionKey[] = ['reset_data', 'apply_discount'];
 
 function IndeterminateCheckbox({
   indeterminate,
@@ -453,11 +454,11 @@ export function UserManagementPage() {
                       const parentChecked = position.permissions.includes(node.key);
                       // All children (used for cleanup when unchecking parent)
                       const allChildKeys = node.children?.map((c) => c.key) ?? [];
-                      // Children allowed to be auto-checked for this position
-                      // Admin-only permissions are excluded for non-Admin positions
-                      const addChildKeys = isAdminPosition
+                      // Children allowed to be auto-checked for this position.
+                      // Admin-managed permissions can be granted by the logged-in Admin account.
+                      const addChildKeys = isCurrentUserAdmin
                         ? allChildKeys
-                        : allChildKeys.filter((k) => k !== 'reset_data');
+                        : allChildKeys.filter((k) => !adminManagedPermissionKeys.includes(k));
                       const checkedChildCount = addChildKeys.filter((k) => position.permissions.includes(k)).length;
                       const isIndeterminate = parentChecked && addChildKeys.length > 0 && checkedChildCount > 0 && checkedChildCount < addChildKeys.length;
 
@@ -483,9 +484,8 @@ export function UserManagementPage() {
                           {node.children && node.children.length > 0 && (
                             <div className={`border-t border-slate-100 transition-opacity ${!parentChecked ? 'pointer-events-none opacity-40' : ''}`}>
                               {node.children.map((child, idx) => {
-                                // reset_data can only be granted to the Admin position
-                                const adminOnly = child.key === 'reset_data';
-                                const lockedForNonAdmin = adminOnly && !isAdminPosition;
+                                const adminManaged = adminManagedPermissionKeys.includes(child.key);
+                                const lockedForNonAdmin = adminManaged && !isCurrentUserAdmin;
                                 return (
                                   <label
                                     key={child.key}
@@ -500,8 +500,8 @@ export function UserManagementPage() {
                                       onChange={() => togglePermission(position.name, child.key)}
                                     />
                                     <span className={lockedForNonAdmin ? 'opacity-40' : ''}>{child.label}</span>
-                                    {adminOnly && !isAdminPosition && (
-                                      <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-400">เฉพาะ Admin</span>
+                                    {adminManaged && (
+                                      <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-400">เฉพาะบัญชี Admin</span>
                                     )}
                                   </label>
                                 );
