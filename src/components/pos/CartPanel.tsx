@@ -338,7 +338,7 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
   const lineCount = useMemo(() => items.length, [items]);
   const allowPriceEdit = allowSalePriceEditSetting === 'true' && can('edit_sale_price');
   const discountApprovalRequired = discountApprovalSetting === 'true';
-  const canUseDiscount = can('apply_discount') || discountApprovalRequired;
+  const canUseDiscount = !discountApprovalRequired || can('apply_discount');
   const itemDiscountTotal = useMemo(() => items.reduce((sum, item) => sum + itemDiscountValue(item), 0), [items]);
   const billDiscountBase = Math.max(0, totals.subtotal - itemDiscountTotal);
   const billDiscountTotal = clampDiscount(billDiscountBase, billDiscountAmount, billDiscountPercent);
