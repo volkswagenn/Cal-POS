@@ -12,6 +12,7 @@ export type PermissionKey =
   | 'void_bill'
   | 'refund_bill'
   | 'edit_sale_price'
+  | 'apply_discount'
   | 'unlock_mirror';
 
 export type PositionConfig = {
@@ -35,6 +36,7 @@ export const PERMISSION_TREE: PermissionNode[] = [
     label: 'ขายสินค้า',
     children: [
       { key: 'edit_sale_price', label: 'แก้ไขราคาหน้าขาย' },
+      { key: 'apply_discount', label: 'ใส่ส่วนลด' },
     ],
   },
   {
@@ -74,7 +76,7 @@ export const defaultPositions: PositionConfig[] = [
   { name: 'Admin', permissions: allPermissionKeys },
   {
     name: 'Manager',
-    permissions: ['dashboard', 'pos', 'edit_sale_price', 'bill_history', 'void_bill', 'products'],
+    permissions: ['dashboard', 'pos', 'edit_sale_price', 'apply_discount', 'bill_history', 'void_bill', 'products'],
   },
   { name: 'Cashier', permissions: ['pos', 'bill_history'] },
 ];
@@ -92,6 +94,11 @@ export function parsePositions(value?: string | null): PositionConfig[] {
               permissionOptions.some((option) => option.key === permission),
             )
           : [];
+        if (Array.isArray(item.permissions)
+          && (item.permissions.includes('apply_item_discount') || item.permissions.includes('apply_bill_discount'))
+          && !permissions.includes('apply_discount')) {
+          permissions.push('apply_discount');
+        }
 
         return {
           name,

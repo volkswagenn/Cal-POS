@@ -83,6 +83,16 @@ const settingPayloadSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+const activityLogPayloadSchema = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  action: z.string().min(1),
+  entityType: z.string().min(1),
+  entityId: z.string().min(1),
+  detail: z.string(),
+  createdAt: z.string().datetime(),
+});
+
 const pushSchema = z.object({
   deviceId: z.string().min(1).default('unknown-device'),
   changes: z.array(z.object({
@@ -243,6 +253,36 @@ async function pushSetting(shopId: string, change: z.infer<typeof pushSchema>['c
   });
 }
 
+async function pushActivityLog(shopId: string, change: z.infer<typeof pushSchema>['changes'][number]) {
+  if (change.action === 'delete') {
+    await prisma.activityLog.deleteMany({ where: { id: change.recordId, shopId } });
+    return;
+  }
+
+  const payload = activityLogPayloadSchema.parse(change.payload);
+  await prisma.activityLog.upsert({
+    where: { id: payload.id },
+    update: {
+      userId: payload.userId,
+      action: payload.action,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      detail: payload.detail,
+      createdAt: new Date(payload.createdAt),
+    },
+    create: {
+      id: payload.id,
+      shopId,
+      userId: payload.userId,
+      action: payload.action,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      detail: payload.detail,
+      createdAt: new Date(payload.createdAt),
+    },
+  });
+}
+
 function toUserSyncDto(user: {
   id: string;
   shopId: string;
@@ -291,7 +331,7 @@ export async function syncRoutes(app: FastifyInstance) {
 
     // Process in dependency order: categories must exist before products (FK constraint)
     const TABLE_ORDER: Record<string, number> = {
-      users: 0, settings: 0, categories: 1, products: 2, sales: 3,
+      users: 0, settings: 0, categories: 1, products: 2, sales: 3, activity_logs: 4,
     };
     const ordered = [...input.changes].sort(
       (a, b) => (TABLE_ORDER[a.tableName] ?? 9) - (TABLE_ORDER[b.tableName] ?? 9),
@@ -313,6 +353,8 @@ export async function syncRoutes(app: FastifyInstance) {
           } else {
             await upsertSaleDetail(request.user.shopId, saleDetailSchema.parse(change.payload));
           }
+        } else if (change.tableName === 'activity_logs') {
+          await pushActivityLog(request.user.shopId, change);
         } else {
           throw new Error(`Unsupported sync table: ${change.tableName}`);
         }
@@ -365,7 +407,7 @@ export async function syncRoutes(app: FastifyInstance) {
       prisma.appSetting.findMany({
         where: {
           shopId: request.user.shopId,
-          key: { in: ['userPositions'] },
+          key: { in: ['userPositions', 'discountApprovalRequired'] },
           updatedAt: { gt: since },
         },
         orderBy: { updatedAt: 'asc' },

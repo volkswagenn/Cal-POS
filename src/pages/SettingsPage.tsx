@@ -22,6 +22,7 @@ import { usePrinterLiveStatus } from '../hooks/usePrinterLiveStatus';
 import { usePermissions } from '../hooks/usePermissions';
 import { getDeviceCode, setDeviceCode, DEVICE_CODE_MAX_LEN } from '../utils/deviceCode';
 import { ALL_PAYMENT_METHODS, PAYMENT_METHODS_SETTING_KEY, parseEnabledPaymentMethods, type PaymentMethodId } from './PaymentSettingsPage';
+import { DISCOUNT_APPROVAL_REQUIRED_KEY } from '../utils/discountApproval';
 
 const sizeOptions = [
   { value: 'small', title: 'เล็ก' },
@@ -286,7 +287,7 @@ export function SettingsPage() {
   const toast = useToast();
   const user = useAuthStore((state) => state.user);
   const printerLiveStatus = usePrinterLiveStatus();
-  const { can } = usePermissions();
+  const { can, positions } = usePermissions();
 
   // --- Payment tab state ---
   const { data: savedPaymentSetting, reload: reloadPaymentSetting } = useAsync(() => SettingsRepository.getSetting(PAYMENT_METHODS_SETTING_KEY), []);
@@ -296,6 +297,7 @@ export function SettingsPage() {
   // --- General tab state ---
   const [showResetCatalogConfirm, setShowResetCatalogConfirm] = useState(false);
   const [isResettingCatalog, setIsResettingCatalog] = useState(false);
+  const [isSavingDiscountApproval, setIsSavingDiscountApproval] = useState(false);
 
   const savedProductSize = useMemo(() => settings?.find((setting) => setting.key === 'productButtonSize')?.value ?? 'medium', [settings]);
   const savedDisplayFontSize = useMemo(() => settings?.find((setting) => setting.key === 'productButtonDisplayFontSize')?.value ?? 'medium', [settings]);
@@ -307,6 +309,11 @@ export function SettingsPage() {
   const savedAutoCloseReceiptEnabled = useMemo(() => (settings?.find((setting) => setting.key === 'autoCloseReceiptEnabled')?.value ?? 'false') === 'true', [settings]);
   const savedAutoCloseReceiptSeconds = useMemo(() => settings?.find((setting) => setting.key === 'autoCloseReceiptSeconds')?.value ?? '5', [settings]);
   const savedAllowSalePriceEdit = useMemo(() => (settings?.find((setting) => setting.key === 'allowSalePriceEdit')?.value ?? 'false') === 'true', [settings]);
+  const discountApprovalRequired = useMemo(() => (settings?.find((setting) => setting.key === DISCOUNT_APPROVAL_REQUIRED_KEY)?.value ?? 'false') === 'true', [settings]);
+  const discountApproverPositions = useMemo(
+    () => positions.filter((position) => position.name === 'Admin' || position.permissions.includes('apply_discount')),
+    [positions],
+  );
   const hasPrinterSettingsChange = JSON.stringify(draftPrinterSettings) !== JSON.stringify(savedPrinterSettings ?? defaultPrinterSettings);
   const printerControlsDisabled = !draftPrinterSettings.enabled;
   const printerStatus = PrinterRepository.getStatus(draftPrinterSettings);
@@ -510,6 +517,18 @@ export function SettingsPage() {
     toast('บันทึกการตั้งค่าการชำระเงินแล้ว', 'success');
     reloadPaymentSetting();
     setIsPaymentDirty(false);
+  };
+
+  const toggleDiscountApprovalRequired = async () => {
+    const next = !discountApprovalRequired;
+    setIsSavingDiscountApproval(true);
+    try {
+      await SettingsRepository.setSetting(DISCOUNT_APPROVAL_REQUIRED_KEY, String(next), { sync: true });
+      toast(next ? 'เปิดการอนุมัติส่วนลดด้วย PIN แล้ว' : 'ปิดการอนุมัติส่วนลดด้วย PIN แล้ว', 'success');
+      reload();
+    } finally {
+      setIsSavingDiscountApproval(false);
+    }
   };
 
   const handleResetCatalog = async () => {
@@ -1503,6 +1522,45 @@ export function SettingsPage() {
 
       {activeTab === 'general' && (
         <div className="max-w-2xl space-y-4">
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+              <h2 className="font-black text-slate-900">การอนุมัติส่วนลด</h2>
+              <p className="mt-0.5 text-xs font-medium text-slate-500">กำหนดว่าการใส่ส่วนลดในหน้าขายต้องใช้ PIN ของตำแหน่งที่ได้รับสิทธิ์หรือไม่</p>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">การใส่ส่วนลดต้องได้รับอนุญาติ</h3>
+                  <p className="mt-1 text-xs font-medium text-slate-500">เมื่อเปิดใช้งาน ต้องใส่ PIN ผู้ที่มีสิทธิ์ “ใส่ส่วนลด” ทุกครั้งที่บันทึกส่วนลด</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleDiscountApprovalRequired}
+                  disabled={isSavingDiscountApproval}
+                  className={`relative h-8 w-14 shrink-0 rounded-full transition ${discountApprovalRequired ? 'bg-primary-600' : 'bg-slate-300'} disabled:opacity-60`}
+                  aria-pressed={discountApprovalRequired}
+                >
+                  <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${discountApprovalRequired ? 'left-7' : 'left-1'}`} />
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 p-4">
+                <h3 className="text-sm font-black text-slate-800">ตำแหน่งที่อนุมัติส่วนลดได้</h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {discountApproverPositions.length > 0 ? (
+                    discountApproverPositions.map((position) => (
+                      <span key={position.name} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                        {position.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm font-bold text-slate-400">ยังไม่มีตำแหน่งที่ได้รับสิทธิ์ใส่ส่วนลด</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <Card className="overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
               <h2 className="font-black text-slate-900">รายการสินค้าและหมวดหมู่</h2>
