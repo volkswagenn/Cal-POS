@@ -222,20 +222,27 @@ export function UserManagementPage() {
     }));
   };
 
-  // Toggle parent: checking adds parent + all children; unchecking removes parent + all children
-  const toggleParentPermission = (positionName: string, parentKey: PermissionKey, childKeys: PermissionKey[]) => {
+  // Toggle parent:
+  // - checking: adds parent + addChildKeys (admin-only children excluded for non-Admin positions)
+  // - unchecking: removes parent + ALL children (cleanupChildKeys) to clear any orphaned permissions
+  const toggleParentPermission = (
+    positionName: string,
+    parentKey: PermissionKey,
+    addChildKeys: PermissionKey[],
+    cleanupChildKeys: PermissionKey[],
+  ) => {
     setPositionDrafts((positions) => positions.map((position) => {
       if (position.name !== positionName) return position;
       const hasParent = position.permissions.includes(parentKey);
       if (hasParent) {
         return {
           ...position,
-          permissions: position.permissions.filter((p) => p !== parentKey && !childKeys.includes(p)),
+          permissions: position.permissions.filter((p) => p !== parentKey && !cleanupChildKeys.includes(p)),
         };
       }
       return {
         ...position,
-        permissions: [...new Set([...position.permissions, parentKey, ...childKeys])],
+        permissions: [...new Set([...position.permissions, parentKey, ...addChildKeys])],
       };
     }));
   };
@@ -400,9 +407,15 @@ export function UserManagementPage() {
                   <div className="space-y-1.5">
                     {PERMISSION_TREE.map((node) => {
                       const parentChecked = position.permissions.includes(node.key);
-                      const childKeys = node.children?.map((c) => c.key) ?? [];
-                      const checkedChildCount = childKeys.filter((k) => position.permissions.includes(k)).length;
-                      const isIndeterminate = parentChecked && childKeys.length > 0 && checkedChildCount > 0 && checkedChildCount < childKeys.length;
+                      // All children (used for cleanup when unchecking parent)
+                      const allChildKeys = node.children?.map((c) => c.key) ?? [];
+                      // Children allowed to be auto-checked for this position
+                      // Admin-only permissions are excluded for non-Admin positions
+                      const addChildKeys = isAdminPosition
+                        ? allChildKeys
+                        : allChildKeys.filter((k) => k !== 'reset_data');
+                      const checkedChildCount = addChildKeys.filter((k) => position.permissions.includes(k)).length;
+                      const isIndeterminate = parentChecked && addChildKeys.length > 0 && checkedChildCount > 0 && checkedChildCount < addChildKeys.length;
 
                       return (
                         <div key={node.key} className="overflow-hidden rounded-md border border-slate-200">
@@ -412,12 +425,12 @@ export function UserManagementPage() {
                               className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                               indeterminate={isIndeterminate}
                               checked={parentChecked}
-                              onChange={() => toggleParentPermission(position.name, node.key, childKeys)}
+                              onChange={() => toggleParentPermission(position.name, node.key, addChildKeys, allChildKeys)}
                             />
                             <span className="flex-1">{node.label}</span>
-                            {childKeys.length > 0 && (
+                            {addChildKeys.length > 0 && (
                               <span className="text-xs font-normal text-slate-400">
-                                {checkedChildCount > 0 ? `${checkedChildCount}/${childKeys.length}` : ''}
+                                {checkedChildCount > 0 ? `${checkedChildCount}/${addChildKeys.length}` : ''}
                               </span>
                             )}
                           </label>
