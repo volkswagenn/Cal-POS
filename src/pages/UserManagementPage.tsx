@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { useBlocker } from 'react-router-dom';
+import { AlertTriangle, Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { LoadingOverlay } from '../components/common/LoadingOverlay';
@@ -72,6 +73,37 @@ export function UserManagementPage() {
     [positionNames],
   );
   const hasPositionChange = JSON.stringify(positionDrafts) !== JSON.stringify(savedPositions);
+
+  // Track which tab the user wants to switch to when there are unsaved changes
+  const [pendingTab, setPendingTab] = useState<UserTab | null>(null);
+
+  // Block router-level navigation (sidebar links) when there are unsaved changes
+  const blocker = useBlocker(hasPositionChange);
+
+  // Prevent accidental browser close/refresh when there are unsaved changes
+  useEffect(() => {
+    if (!hasPositionChange) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasPositionChange]);
+
+  // Handle tab switch — intercept when there are unsaved changes
+  const handleTabChange = (tab: UserTab) => {
+    if (tab === activeTab) return;
+    if (hasPositionChange) {
+      setPendingTab(tab);
+    } else {
+      setActiveTab(tab);
+    }
+  };
+
+  // Discard changes and proceed (tab switch)
+  const discardAndSwitchTab = () => {
+    setPositionDrafts(savedPositions);
+    setActiveTab(pendingTab!);
+    setPendingTab(null);
+  };
 
   const activeAdminCount = useMemo(
     () => (users ?? []).filter((u) => u.role === ADMIN_ROLE && u.isActive).length,
@@ -281,11 +313,14 @@ export function UserManagementPage() {
       <PageHeader title="จัดการผู้ใช้" subtitle="เพิ่มพนักงาน กำหนดตำแหน่ง และเลือกฟังก์ชันที่อนุญาตให้ใช้งาน" />
 
       <div className="mb-4 inline-grid grid-cols-2 rounded-lg bg-white p-1 shadow-sm">
-        <button className={`flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'users' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setActiveTab('users')}>
+        <button className={`flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'users' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => handleTabChange('users')}>
           <Users size={18} /> ผู้ใช้
         </button>
-        <button className={`flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'positions' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => setActiveTab('positions')}>
+        <button className={`relative flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'positions' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => handleTabChange('positions')}>
           <ShieldCheck size={18} /> ตำแหน่ง/สิทธิ์
+          {hasPositionChange && (
+            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-400" title="มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก" />
+          )}
         </button>
       </div>
 
@@ -619,6 +654,68 @@ export function UserManagementPage() {
             <div className="grid grid-cols-2 gap-3">
               <button className="rounded-md bg-slate-100 py-3 font-bold text-slate-700 hover:bg-slate-200" onClick={() => setConfirmDeleteUser(null)}>ยกเลิก</button>
               <button className="rounded-md bg-red-600 py-3 font-black text-white hover:bg-red-700" onClick={() => handleDeleteUser(confirmDeleteUser)}>ลบผู้ใช้</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Unsaved changes warning — tab switch */}
+      {pendingTab !== null && (
+        <Modal title="ยังไม่ได้บันทึก" onClose={() => setPendingTab(null)}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-black text-amber-900">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</p>
+                <p className="mt-1 text-sm font-medium text-amber-700">
+                  หากออกจากแท็บนี้ การแก้ไขตำแหน่ง/สิทธิ์ทั้งหมดจะหายไป
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                className="rounded-md bg-primary-600 py-3 font-black text-white hover:bg-primary-700"
+                onClick={() => setPendingTab(null)}
+              >
+                กลับไปบันทึก
+              </button>
+              <button
+                className="rounded-md bg-slate-100 py-3 font-bold text-slate-700 hover:bg-slate-200"
+                onClick={discardAndSwitchTab}
+              >
+                ออกโดยไม่บันทึก
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Unsaved changes warning — router navigation (sidebar links) */}
+      {blocker.state === 'blocked' && (
+        <Modal title="ยังไม่ได้บันทึก" onClose={() => blocker.reset()}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-black text-amber-900">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</p>
+                <p className="mt-1 text-sm font-medium text-amber-700">
+                  หากออกจากหน้านี้ การแก้ไขตำแหน่ง/สิทธิ์ทั้งหมดจะหายไป
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                className="rounded-md bg-primary-600 py-3 font-black text-white hover:bg-primary-700"
+                onClick={() => blocker.reset()}
+              >
+                กลับไปบันทึก
+              </button>
+              <button
+                className="rounded-md bg-slate-100 py-3 font-bold text-slate-700 hover:bg-slate-200"
+                onClick={() => blocker.proceed()}
+              >
+                ออกโดยไม่บันทึก
+              </button>
             </div>
           </div>
         </Modal>
