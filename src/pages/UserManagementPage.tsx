@@ -15,6 +15,7 @@ import { defaultPositions, parsePositions, PERMISSION_TREE, positionSettingKey, 
 import { requestSync } from '../services/api/syncScheduler';
 
 const ADMIN_ROLE = 'Admin';
+const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
 
 function IndeterminateCheckbox({
   indeterminate,
@@ -298,7 +299,10 @@ export function UserManagementPage() {
   };
 
   const savePositions = async () => {
-    await SettingsRepository.setSetting(positionSettingKey, JSON.stringify(positionDrafts), { sync: true });
+    const normalizedPositions = positionDrafts.map((position) => (
+      position.name === ADMIN_ROLE ? { ...position, permissions: adminPermissions } : position
+    ));
+    await SettingsRepository.setSetting(positionSettingKey, JSON.stringify(normalizedPositions), { sync: true });
     window.dispatchEvent(new Event('calpos:permissions-updated'));
     toast('บันทึกตำแหน่งและสิทธิ์แล้ว', 'success');
     reloadPositionSetting();
@@ -439,8 +443,13 @@ export function UserManagementPage() {
                       <Trash2 size={18} />
                     </button>
                   </div>
-                  <div className="space-y-1.5">
-                    {PERMISSION_TREE.map((node) => {
+                  {isAdminPosition ? (
+                    <div className="rounded-md border border-primary-100 bg-primary-50 px-4 py-3 text-sm font-bold text-primary-800">
+                      Admin ใช้งานได้ทุกฟังก์ชันของระบบเสมอ จึงไม่ต้องเลือกสิทธิ์
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {PERMISSION_TREE.map((node) => {
                       const parentChecked = position.permissions.includes(node.key);
                       // All children (used for cleanup when unchecking parent)
                       const allChildKeys = node.children?.map((c) => c.key) ?? [];
@@ -501,8 +510,9 @@ export function UserManagementPage() {
                           )}
                         </div>
                       );
-                    })}
-                  </div>
+                      })}
+                    </div>
+                  )}
                 </Card>
               );
             })}

@@ -66,10 +66,12 @@ export const permissionOptions: PermissionLeaf[] = PERMISSION_TREE.flatMap((node
   ...(node.children ?? []),
 ]);
 
+const allPermissionKeys = permissionOptions.map((p) => p.key);
+
 export const positionSettingKey = 'userPositions';
 
 export const defaultPositions: PositionConfig[] = [
-  { name: 'Admin', permissions: permissionOptions.map((p) => p.key) },
+  { name: 'Admin', permissions: allPermissionKeys },
   {
     name: 'Manager',
     permissions: ['dashboard', 'pos', 'edit_sale_price', 'bill_history', 'void_bill', 'products'],
@@ -83,14 +85,19 @@ export function parsePositions(value?: string | null): PositionConfig[] {
     if (!Array.isArray(parsed)) return defaultPositions;
     const valid = parsed
       .filter((item) => item && typeof item.name === 'string')
-      .map((item) => ({
-        name: item.name,
-        permissions: Array.isArray(item.permissions)
+      .map((item) => {
+        const name = item.name;
+        const permissions = Array.isArray(item.permissions)
           ? item.permissions.filter((permission: unknown): permission is PermissionKey =>
               permissionOptions.some((option) => option.key === permission),
             )
-          : [],
-      }));
+          : [];
+
+        return {
+          name,
+          permissions: name === 'Admin' ? allPermissionKeys : permissions,
+        };
+      });
     return valid.length ? valid : defaultPositions;
   } catch {
     return defaultPositions;
@@ -99,6 +106,7 @@ export function parsePositions(value?: string | null): PositionConfig[] {
 
 export function permissionsForRole(role: string | undefined, positions: PositionConfig[]) {
   if (!role) return [];
+  if (role === 'Admin') return allPermissionKeys;
   return positions.find((position) => position.name === role)?.permissions ?? [];
 }
 
