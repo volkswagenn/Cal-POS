@@ -9,8 +9,10 @@ export type LoginSecurityConfig = {
 export type LoginSecurityState = {
   passwordFailuresByUserId: Record<string, number>;
   blockedUserIds: string[];
+  blockedAtByUserId: Record<string, string>; // ISO timestamp ของเวลาที่ถูกบล็อก (per user)
   pinFailures: number;
   pinBlocked: boolean;
+  pinBlockedAt: string | null; // ISO timestamp ของเวลาที่ PIN ถูกบล็อก
 };
 
 export const defaultLoginSecurityConfig: LoginSecurityConfig = {
@@ -21,8 +23,10 @@ export const defaultLoginSecurityConfig: LoginSecurityConfig = {
 export const defaultLoginSecurityState: LoginSecurityState = {
   passwordFailuresByUserId: {},
   blockedUserIds: [],
+  blockedAtByUserId: {},
   pinFailures: 0,
   pinBlocked: false,
+  pinBlockedAt: null,
 };
 
 function positiveInt(value: unknown, fallback: number) {
@@ -50,8 +54,12 @@ export function parseLoginSecurityState(value?: string | null): LoginSecuritySta
         ? parsed.passwordFailuresByUserId
         : {},
       blockedUserIds: Array.isArray(parsed?.blockedUserIds) ? parsed.blockedUserIds.filter((id: unknown) => typeof id === 'string') : [],
+      blockedAtByUserId: parsed?.blockedAtByUserId && typeof parsed.blockedAtByUserId === 'object'
+        ? parsed.blockedAtByUserId
+        : {},
       pinFailures: Math.max(0, Number(parsed?.pinFailures ?? 0) || 0),
       pinBlocked: Boolean(parsed?.pinBlocked),
+      pinBlockedAt: typeof parsed?.pinBlockedAt === 'string' ? parsed.pinBlockedAt : null,
     };
   } catch {
     return defaultLoginSecurityState;
@@ -60,4 +68,9 @@ export function parseLoginSecurityState(value?: string | null): LoginSecuritySta
 
 export function isUserLoginBlocked(userId: string | undefined, state: LoginSecurityState) {
   return Boolean(userId && state.blockedUserIds.includes(userId));
+}
+
+export function getBlockedAt(userId: string | undefined, state: LoginSecurityState): string | null {
+  if (!userId) return null;
+  return state.blockedAtByUserId[userId] ?? null;
 }

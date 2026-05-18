@@ -8,6 +8,7 @@ import { authApi } from '../services/api/authApi';
 import { ApiError, hasApiBaseUrl } from '../services/api/client';
 import type { AuthTokens, User } from '../types';
 import { SettingsRepository } from '../db/repositories/SettingsRepository';
+import { nowIso } from '../utils/date';
 import { LOGIN_SECURITY_CONFIG_KEY, LOGIN_SECURITY_STATE_KEY, isUserLoginBlocked, parseLoginSecurityConfig, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
 
 const RESET_PIN_LENGTH = 6;
@@ -57,10 +58,13 @@ export function LoginPage() {
     const { config, state } = await readLoginSecurity();
     const attempts = (state.passwordFailuresByUserId[targetUser.id] ?? 0) + 1;
     const blocked = attempts >= config.passwordMaxAttempts;
+    const blockedAtByUserId = { ...state.blockedAtByUserId };
+    if (blocked) blockedAtByUserId[targetUser.id] = nowIso();
     await saveLoginSecurityState({
       ...state,
       passwordFailuresByUserId: { ...state.passwordFailuresByUserId, [targetUser.id]: attempts },
       blockedUserIds: blocked ? [...new Set([...state.blockedUserIds, targetUser.id])] : state.blockedUserIds,
+      blockedAtByUserId,
     });
     if (blocked) toast(`บัญชี ${targetUser.displayName} ถูกบล็อกจากการใส่รหัสผ่านผิดครบ ${config.passwordMaxAttempts} ครั้ง`, 'error');
   };
@@ -69,12 +73,16 @@ export function LoginPage() {
     const { state } = await readLoginSecurity();
     const passwordFailuresByUserId = { ...state.passwordFailuresByUserId };
     delete passwordFailuresByUserId[targetUser.id];
+    const blockedAtByUserId = { ...state.blockedAtByUserId };
+    delete blockedAtByUserId[targetUser.id];
     await saveLoginSecurityState({
       ...state,
       passwordFailuresByUserId,
+      blockedAtByUserId,
       blockedUserIds: state.blockedUserIds.filter((id) => id !== targetUser.id),
       pinFailures: 0,
       pinBlocked: false,
+      pinBlockedAt: null,
     });
     setPinLoginBlocked(false);
   };
@@ -83,7 +91,12 @@ export function LoginPage() {
     const { config, state } = await readLoginSecurity();
     const pinFailures = state.pinFailures + 1;
     const pinBlocked = pinFailures >= config.pinMaxAttempts;
-    await saveLoginSecurityState({ ...state, pinFailures, pinBlocked });
+    await saveLoginSecurityState({
+      ...state,
+      pinFailures,
+      pinBlocked,
+      pinBlockedAt: pinBlocked ? nowIso() : state.pinBlockedAt,
+    });
     if (pinBlocked) {
       setPinLoginBlocked(true);
       setPin('');
@@ -94,7 +107,7 @@ export function LoginPage() {
   const clearPinFailures = async () => {
     const { state } = await readLoginSecurity();
     if (state.pinFailures === 0 && !state.pinBlocked) return;
-    await saveLoginSecurityState({ ...state, pinFailures: 0, pinBlocked: false });
+    await saveLoginSecurityState({ ...state, pinFailures: 0, pinBlocked: false, pinBlockedAt: null });
   };
 
   const submit = async (event: FormEvent) => {

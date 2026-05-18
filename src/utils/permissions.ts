@@ -37,7 +37,7 @@ export const PERMISSION_TREE: PermissionNode[] = [
     label: 'ขายสินค้า',
     children: [
       { key: 'edit_sale_price', label: 'แก้ไขราคาหน้าขาย' },
-      { key: 'apply_discount', label: 'ใส่ PIN ส่วนลดรายการ/ท้ายบิล' },
+      { key: 'apply_discount', label: 'อนุญาติให้ใช้ส่วนลดรายการ/ส่วนลดท้ายบิล' },
     ],
   },
   {

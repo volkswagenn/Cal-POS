@@ -13,7 +13,9 @@ import type { Role, User } from '../types';
 import { useToast } from '../components/common/Toast';
 import { defaultPositions, hasPermission, parsePositions, PERMISSION_TREE, positionSettingKey, type PermissionKey, type PositionConfig } from '../utils/permissions';
 import { requestSync } from '../services/api/syncScheduler';
-import { LOGIN_SECURITY_STATE_KEY, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
+import { nowIso } from '../utils/date';
+import { formatDateTime } from '../utils/date';
+import { LOGIN_SECURITY_STATE_KEY, getBlockedAt, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
 
 const ADMIN_ROLE = 'Admin';
 const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
@@ -249,10 +251,17 @@ export function UserManagementPage() {
       return;
     }
     const passwordFailuresByUserId = { ...loginSecurityState.passwordFailuresByUserId };
-    if (blocked) delete passwordFailuresByUserId[user.id];
+    const blockedAtByUserId = { ...loginSecurityState.blockedAtByUserId };
+    if (blocked) {
+      delete passwordFailuresByUserId[user.id];
+      delete blockedAtByUserId[user.id];
+    } else {
+      blockedAtByUserId[user.id] = nowIso();
+    }
     await updateLoginSecurityState({
       ...loginSecurityState,
       passwordFailuresByUserId,
+      blockedAtByUserId,
       blockedUserIds: blocked
         ? loginSecurityState.blockedUserIds.filter((id) => id !== user.id)
         : [...new Set([...loginSecurityState.blockedUserIds, user.id])],
@@ -384,7 +393,7 @@ export function UserManagementPage() {
                     <th>ตำแหน่ง</th>
                     <th>PIN</th>
                     <th>สถานะ</th>
-                    <th>บล็อก Login</th>
+                    <th>เวลาที่ถูกบล็อก</th>
                     <th className="p-3 text-right">จัดการ</th>
                   </tr>
                 </thead>
@@ -402,19 +411,27 @@ export function UserManagementPage() {
                         {isCurrentUserAdmin ? user.pin : <span className="text-slate-400">••••••</span>}
                       </td>
                       <td>
-                        <span className={`text-xs font-bold ${user.isActive ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {user.isActive ? 'ใช้งาน' : 'ปิด'}
-                        </span>
-                      </td>
-                      <td>
-                        {isUserLoginBlocked(user.id, loginSecurityState) ? (
+                        {!user.isActive ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-500">
+                            ปิดใช้งาน
+                          </span>
+                        ) : isUserLoginBlocked(user.id, loginSecurityState) ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-xs font-black text-red-600">
                             <Lock size={11} /> ถูกบล็อก
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">
-                            <Unlock size={11} /> ปกติ
+                            <Unlock size={11} /> ใช้งาน
                           </span>
+                        )}
+                      </td>
+                      <td>
+                        {getBlockedAt(user.id, loginSecurityState) ? (
+                          <span className="text-xs text-slate-500">
+                            {formatDateTime(getBlockedAt(user.id, loginSecurityState)!)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
                         )}
                       </td>
                       <td className="p-3">
