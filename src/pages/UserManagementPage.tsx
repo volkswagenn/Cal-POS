@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
-import { AlertTriangle, Edit3, Eye, EyeOff, KeyRound, Lock, Plus, Save, ShieldCheck, Trash2, Unlock, Users } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Edit3, Eye, EyeOff, KeyRound, Layers, Lock, Plus, Save, ShieldCheck, Trash2, Unlock, Users } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { LoadingOverlay } from '../components/common/LoadingOverlay';
@@ -16,6 +16,7 @@ import { requestSync } from '../services/api/syncScheduler';
 import { nowIso } from '../utils/date';
 import { formatDateTime } from '../utils/date';
 import { LOGIN_SECURITY_STATE_KEY, getBlockedAt, getBlockReason, getBlockReasonLabel, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
+import { ROLE_HIERARCHY_KEY, canManageRole, detectHierarchyConflicts, parseHierarchy, syncHierarchyWithPositions } from '../utils/roleHierarchy';
 
 const ADMIN_ROLE = 'Admin';
 const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
@@ -33,7 +34,7 @@ function IndeterminateCheckbox({
   return <input type="checkbox" ref={ref} className={className} {...props} />;
 }
 
-type UserTab = 'users' | 'positions';
+type UserTab = 'users' | 'positions' | 'hierarchy';
 type UserForm = {
   username: string;
   displayName: string;
@@ -58,11 +59,13 @@ export function UserManagementPage() {
   const { data: users, reload, loading } = useAsync(() => UserRepository.getUsers(), []);
   const { data: positionSetting, reload: reloadPositionSetting } = useAsync(() => SettingsRepository.getSetting(positionSettingKey, JSON.stringify(defaultPositions)), []);
   const { data: loginSecurityStateSetting, reload: reloadLoginSecurityState } = useAsync(() => SettingsRepository.getSetting(LOGIN_SECURITY_STATE_KEY), []);
+  const { data: hierarchySetting, reload: reloadHierarchy } = useAsync(() => SettingsRepository.getSetting(ROLE_HIERARCHY_KEY), []);
   const [activeTab, setActiveTab] = useState<UserTab>('users');
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState<UserForm>(emptyUserForm('Cashier'));
   const [positionDrafts, setPositionDrafts] = useState<PositionConfig[]>(defaultPositions);
+  const [hierarchyDrafts, setHierarchyDrafts] = useState<string[]>([]);
   const [newPositionName, setNewPositionName] = useState('');
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<User | null>(null);
   const [showPasswordInModal, setShowPasswordInModal] = useState(false);
@@ -82,24 +85,48 @@ export function UserManagementPage() {
   const hasPositionChange = JSON.stringify(positionDrafts) !== JSON.stringify(savedPositions);
   const canBlockUsers = isCurrentUserAdmin || hasPermission(currentUser?.role, savedPositions, 'unblock_user');
 
+  const savedHierarchy = useMemo(() => parseHierarchy(hierarchySetting), [hierarchySetting]);
+  const hierarchy = useMemo(
+    () => syncHierarchyWithPositions(savedHierarchy, positionNames),
+    [savedHierarchy, positionNames],
+  );
+  const hasHierarchyChange = JSON.stringify(hierarchyDrafts) !== JSON.stringify(hierarchy);
+  const hierarchyConflicts = useMemo(
+    () => detectHierarchyConflicts(hierarchy, savedPositions),
+    [hierarchy, savedPositions],
+  );
+  const permissionLabel = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const node of PERMISSION_TREE) {
+      map[node.key] = node.label;
+      for (const child of node.children ?? []) map[child.key] = child.label;
+    }
+    return map;
+  }, []);
+
+  const canManageUser = (user: User) =>
+    isCurrentUserAdmin || canManageRole(currentUser?.role, user.role, hierarchy);
+  const canAssignRole = (role: string) =>
+    isCurrentUserAdmin || canManageRole(currentUser?.role, role, hierarchy);
+
   // Track which tab the user wants to switch to when there are unsaved changes
   const [pendingTab, setPendingTab] = useState<UserTab | null>(null);
 
   // Block router-level navigation (sidebar links) when there are unsaved changes
-  const blocker = useBlocker(hasPositionChange);
+  const blocker = useBlocker(hasPositionChange || hasHierarchyChange);
 
   // Prevent accidental browser close/refresh when there are unsaved changes
   useEffect(() => {
-    if (!hasPositionChange) return;
+    if (!hasPositionChange && !hasHierarchyChange) return;
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [hasPositionChange]);
+  }, [hasPositionChange, hasHierarchyChange]);
 
   // Handle tab switch — intercept when there are unsaved changes
   const handleTabChange = (tab: UserTab) => {
     if (tab === activeTab) return;
-    if (hasPositionChange) {
+    if (hasPositionChange || hasHierarchyChange) {
       setPendingTab(tab);
     } else {
       setActiveTab(tab);
@@ -109,6 +136,7 @@ export function UserManagementPage() {
   // Discard changes and proceed (tab switch)
   const discardAndSwitchTab = () => {
     setPositionDrafts(savedPositions);
+    setHierarchyDrafts(hierarchy);
     setActiveTab(pendingTab!);
     setPendingTab(null);
   };
@@ -125,6 +153,10 @@ export function UserManagementPage() {
   useEffect(() => {
     setPositionDrafts(savedPositions);
   }, [savedPositions]);
+
+  useEffect(() => {
+    setHierarchyDrafts(hierarchy);
+  }, [hierarchy]);
 
   // เมื่อ device อื่น sync ตำแหน่งใหม่มา → reload UI ทันที
   useEffect(() => {
@@ -178,6 +210,19 @@ export function UserManagementPage() {
   const saveUser = async (event: FormEvent) => {
     event.preventDefault();
 
+    // Hierarchy: ห้ามเปลี่ยน role ตัวเอง
+    if (editingUser && editingUser.id === currentUser?.id && userForm.role !== editingUser.role) {
+      return toast('ไม่สามารถเปลี่ยนตำแหน่งของตัวเองได้', 'error');
+    }
+    // Hierarchy: ต้องมีสิทธิ์จัดการ role ที่จะ assign
+    if (!canAssignRole(userForm.role)) {
+      return toast('ไม่มีสิทธิ์กำหนดตำแหน่งนี้ให้ผู้ใช้', 'error');
+    }
+    // Hierarchy: ต้องมีสิทธิ์จัดการ user ที่กำลังแก้ไข
+    if (editingUser && !canManageUser(editingUser)) {
+      return toast('ไม่มีสิทธิ์แก้ไขผู้ใช้ระดับนี้', 'error');
+    }
+
     if (editingUser) {
       const isChangingFromLastAdmin =
         editingUser.role === ADMIN_ROLE && userForm.role !== ADMIN_ROLE && activeAdminCount <= 1;
@@ -229,6 +274,10 @@ export function UserManagementPage() {
   };
 
   const handleToggleActive = async (user: User) => {
+    if (!canManageUser(user)) {
+      toast('ไม่มีสิทธิ์เปลี่ยนสถานะผู้ใช้ระดับนี้', 'error');
+      return;
+    }
     if (isLastActiveAdmin(user) && user.isActive) {
       toast('ไม่สามารถปิดการใช้งาน Admin คนสุดท้ายได้', 'error');
       return;
@@ -245,6 +294,10 @@ export function UserManagementPage() {
   };
 
   const handleToggleLoginBlocked = async (user: User) => {
+    if (!canManageUser(user)) {
+      toast('ไม่มีสิทธิ์จัดการผู้ใช้ระดับนี้', 'error');
+      return;
+    }
     const blocked = isUserLoginBlocked(user.id, loginSecurityState);
     if (!blocked && isLastActiveAdmin(user)) {
       toast('ไม่สามารถบล็อกการลงชื่อเข้าใช้ของ Admin คนสุดท้ายได้', 'error');
@@ -274,6 +327,11 @@ export function UserManagementPage() {
   };
 
   const handleDeleteUser = async (user: User) => {
+    if (!canManageUser(user)) {
+      toast('ไม่มีสิทธิ์ลบผู้ใช้ระดับนี้', 'error');
+      setConfirmDeleteUser(null);
+      return;
+    }
     if (isLastActiveAdmin(user)) {
       toast('ไม่สามารถลบ Admin คนสุดท้ายได้', 'error');
       setConfirmDeleteUser(null);
@@ -351,6 +409,23 @@ export function UserManagementPage() {
     requestSync({ immediate: true });
   };
 
+  const saveHierarchy = async () => {
+    await SettingsRepository.setSetting(ROLE_HIERARCHY_KEY, JSON.stringify(hierarchyDrafts), { sync: true });
+    toast('บันทึกลำดับสิทธิ์แล้ว', 'success');
+    reloadHierarchy();
+    requestSync({ immediate: true });
+  };
+
+  const moveHierarchyItem = (index: number, direction: 'up' | 'down') => {
+    setHierarchyDrafts((prev) => {
+      const next = [...prev];
+      const swapIndex = direction === 'up' ? index - 1 : index + 1;
+      if (swapIndex < 0 || swapIndex >= next.length) return prev;
+      [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+      return next;
+    });
+  };
+
   const isRoleChangeLocked = editingUser?.role === ADMIN_ROLE && activeAdminCount <= 1;
 
   return (
@@ -358,7 +433,7 @@ export function UserManagementPage() {
       <LoadingOverlay show={loading && !users} />
       <PageHeader title="จัดการผู้ใช้" subtitle="เพิ่มพนักงาน กำหนดตำแหน่ง และเลือกฟังก์ชันที่อนุญาตให้ใช้งาน" />
 
-      <div className="mb-4 inline-grid grid-cols-2 rounded-lg bg-white p-1 shadow-sm">
+      <div className={`mb-4 inline-grid rounded-lg bg-white p-1 shadow-sm ${isCurrentUserAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <button className={`flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'users' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => handleTabChange('users')}>
           <Users size={18} /> ผู้ใช้
         </button>
@@ -368,6 +443,14 @@ export function UserManagementPage() {
             <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-400" title="มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก" />
           )}
         </button>
+        {isCurrentUserAdmin && (
+          <button className={`relative flex items-center gap-2 rounded-md px-4 py-2 font-black ${activeTab === 'hierarchy' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`} onClick={() => handleTabChange('hierarchy')}>
+            <Layers size={18} /> ลำดับสิทธิ์
+            {hasHierarchyChange && (
+              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-400" title="มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก" />
+            )}
+          </button>
+        )}
       </div>
 
       {activeTab === 'users' && (
@@ -445,32 +528,37 @@ export function UserManagementPage() {
                       </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-1.5">
-                          <button className="rounded-md bg-primary-50 p-2 text-primary-700 hover:bg-primary-100" onClick={() => openEditUser(user)} aria-label="แก้ไข">
+                          <button
+                            className={`rounded-md p-2 ${!canManageUser(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-primary-50 text-primary-700 hover:bg-primary-100'}`}
+                            onClick={() => { if (canManageUser(user)) openEditUser(user); }}
+                            aria-label="แก้ไข"
+                            title={!canManageUser(user) ? 'ไม่มีสิทธิ์แก้ไขผู้ใช้ระดับนี้' : 'แก้ไข'}
+                          >
                             <Edit3 size={16} />
                           </button>
                           <button
-                            className={`rounded-md p-2 ${isLastActiveAdmin(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                            className={`rounded-md p-2 ${isLastActiveAdmin(user) || !canManageUser(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                             onClick={() => handleToggleActive(user)}
                             aria-label="เปิดปิด"
-                            title={isLastActiveAdmin(user) ? 'Admin คนสุดท้าย' : user.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
+                            title={!canManageUser(user) ? 'ไม่มีสิทธิ์' : isLastActiveAdmin(user) ? 'Admin คนสุดท้าย' : user.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
                           >
                             {user.isActive ? <Eye size={16} /> : <EyeOff size={16} />}
                           </button>
                           {canBlockUsers && (
                             <button
-                              className={`rounded-md p-2 ${isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-red-100 text-red-700 ring-1 ring-red-200 hover:bg-red-200' : 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 hover:bg-emerald-100'}`}
+                              className={`rounded-md p-2 ${!canManageUser(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-red-100 text-red-700 ring-1 ring-red-200 hover:bg-red-200' : 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100 hover:bg-emerald-100'}`}
                               onClick={() => handleToggleLoginBlocked(user)}
                               aria-label={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อก login' : 'บล็อก login'}
-                              title={isUserLoginBlocked(user.id, loginSecurityState) ? 'คลิกเพื่อปลดล็อกการลงชื่อเข้าใช้' : 'คลิกเพื่อบล็อกการลงชื่อเข้าใช้'}
+                              title={!canManageUser(user) ? 'ไม่มีสิทธิ์' : isUserLoginBlocked(user.id, loginSecurityState) ? 'คลิกเพื่อปลดล็อกการลงชื่อเข้าใช้' : 'คลิกเพื่อบล็อกการลงชื่อเข้าใช้'}
                             >
                               {isUserLoginBlocked(user.id, loginSecurityState) ? <Lock size={16} /> : <Unlock size={16} />}
                             </button>
                           )}
                           <button
-                            className={`rounded-md p-2 ${isLastActiveAdmin(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
-                            onClick={() => { if (!isLastActiveAdmin(user)) setConfirmDeleteUser(user); }}
+                            className={`rounded-md p-2 ${isLastActiveAdmin(user) || !canManageUser(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                            onClick={() => { if (!isLastActiveAdmin(user) && canManageUser(user)) setConfirmDeleteUser(user); }}
                             aria-label="ลบ"
-                            title={isLastActiveAdmin(user) ? 'Admin คนสุดท้าย ลบไม่ได้' : 'ลบผู้ใช้'}
+                            title={!canManageUser(user) ? 'ไม่มีสิทธิ์' : isLastActiveAdmin(user) ? 'Admin คนสุดท้าย ลบไม่ได้' : 'ลบผู้ใช้'}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -598,6 +686,87 @@ export function UserManagementPage() {
         </div>
       )}
 
+      {activeTab === 'hierarchy' && isCurrentUserAdmin && (
+        <div className="space-y-4">
+          <Card className="p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="font-black text-slate-950">ลำดับสิทธิ์ตำแหน่ง</h2>
+                <p className="mt-1 text-sm text-slate-500">จัดเรียงตำแหน่งจากระดับ <span className="font-bold">ต่ำสุด (บน)</span> ไป <span className="font-bold">สูงสุด (ล่าง)</span> — ตำแหน่งที่ rank สูงกว่าสามารถจัดการตำแหน่งที่ rank เท่ากันหรือต่ำกว่าได้</p>
+              </div>
+              <button
+                className={`rounded-md px-4 py-3 font-black text-white ${hasHierarchyChange ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-300'}`}
+                disabled={!hasHierarchyChange}
+                onClick={saveHierarchy}
+              >
+                <Save className="mr-2 inline" size={18} /> บันทึก
+              </button>
+            </div>
+          </Card>
+
+          {hierarchyConflicts.length > 0 && (
+            <Card className="border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-black text-amber-900">พบความขัดแย้งของสิทธิ์</p>
+                  <p className="mt-1 text-sm text-amber-700">ตำแหน่ง rank ต่ำกว่ามีสิทธิ์บางอย่างที่ตำแหน่ง rank สูงกว่าไม่มี ระบบยังทำงานได้ปกติ แต่ควรตรวจสอบการตั้งค่าสิทธิ์</p>
+                  <ul className="mt-2 space-y-1.5">
+                    {hierarchyConflicts.map((conflict, i) => (
+                      <li key={i} className="text-sm text-amber-800">
+                        <span className="font-bold">{conflict.lowerRole}</span> (rank ต่ำกว่า) มีสิทธิ์ที่ <span className="font-bold">{conflict.higherRole}</span> ไม่มี:{' '}
+                        <span className="font-medium">{conflict.extraPermissions.map((p) => permissionLabel[p] ?? p).join(', ')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <Card className="overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {hierarchyDrafts.map((role, index) => (
+                <div key={role} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex flex-col">
+                    <button
+                      className={`rounded p-1 ${index === 0 ? 'cursor-not-allowed text-slate-200' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                      disabled={index === 0}
+                      onClick={() => moveHierarchyItem(index, 'up')}
+                      aria-label="เลื่อนขึ้น"
+                    >
+                      <ArrowUp size={14} />
+                    </button>
+                    <button
+                      className={`rounded p-1 ${index === hierarchyDrafts.length - 1 ? 'cursor-not-allowed text-slate-200' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+                      disabled={index === hierarchyDrafts.length - 1}
+                      onClick={() => moveHierarchyItem(index, 'down')}
+                      aria-label="เลื่อนลง"
+                    >
+                      <ArrowDown size={14} />
+                    </button>
+                  </div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-600">
+                    {index + 1}
+                  </div>
+                  <span className="flex-1 font-bold text-slate-800">{role}</span>
+                  <span className="text-xs text-slate-400">rank {index + 1}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-3 bg-primary-50 px-4 py-3">
+                <div className="flex flex-col">
+                  <button className="cursor-not-allowed rounded p-1 text-slate-200" disabled><ArrowUp size={14} /></button>
+                  <button className="cursor-not-allowed rounded p-1 text-slate-200" disabled><ArrowDown size={14} /></button>
+                </div>
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-black text-primary-700">∞</div>
+                <span className="flex-1 font-bold text-primary-700">Admin</span>
+                <span className="text-xs text-primary-400">สิทธิ์สูงสุด (ตายตัว)</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Edit / Create User Modal */}
       {showUserModal && (
         <Modal title={editingUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้'} onClose={() => setShowUserModal(false)}>
@@ -706,7 +875,7 @@ export function UserManagementPage() {
                 onChange={(event) => setUserForm({ ...userForm, role: event.target.value })}
                 disabled={isRoleChangeLocked}
               >
-                {positionNames.map((position) => <option key={position} value={position}>{position}</option>)}
+                {positionNames.filter((p) => canAssignRole(p) || p === userForm.role).map((position) => <option key={position} value={position}>{position}</option>)}
               </select>
             </div>
 
@@ -757,7 +926,7 @@ export function UserManagementPage() {
               <div>
                 <p className="font-black text-amber-900">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</p>
                 <p className="mt-1 text-sm font-medium text-amber-700">
-                  หากออกจากแท็บนี้ การแก้ไขตำแหน่ง/สิทธิ์ทั้งหมดจะหายไป
+                  หากออกจากแท็บนี้ การแก้ไขที่ยังไม่ได้บันทึกทั้งหมดจะหายไป
                 </p>
               </div>
             </div>
@@ -788,7 +957,7 @@ export function UserManagementPage() {
               <div>
                 <p className="font-black text-amber-900">มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก</p>
                 <p className="mt-1 text-sm font-medium text-amber-700">
-                  หากออกจากหน้านี้ การแก้ไขตำแหน่ง/สิทธิ์ทั้งหมดจะหายไป
+                  หากออกจากหน้านี้ การแก้ไขที่ยังไม่ได้บันทึกทั้งหมดจะหายไป
                 </p>
               </div>
             </div>
