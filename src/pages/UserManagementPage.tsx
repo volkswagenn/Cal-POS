@@ -425,22 +425,30 @@ export function UserManagementPage() {
                           {/* Child rows — tab/action-level permissions */}
                           {node.children && node.children.length > 0 && (
                             <div className={`border-t border-slate-100 transition-opacity ${!parentChecked ? 'pointer-events-none opacity-40' : ''}`}>
-                              {node.children.map((child, idx) => (
-                                <label
-                                  key={child.key}
-                                  className={`flex cursor-pointer items-center gap-2 py-2 pl-8 pr-3 text-sm font-medium text-slate-700 hover:bg-slate-50 ${idx < node.children!.length - 1 ? 'border-b border-slate-100' : ''}`}
-                                >
-                                  <span className="select-none text-slate-300">└</span>
-                                  <input
-                                    type="checkbox"
-                                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                                    checked={position.permissions.includes(child.key)}
-                                    disabled={!parentChecked}
-                                    onChange={() => togglePermission(position.name, child.key)}
-                                  />
-                                  {child.label}
-                                </label>
-                              ))}
+                              {node.children.map((child, idx) => {
+                                // reset_data can only be granted to the Admin position
+                                const adminOnly = child.key === 'reset_data';
+                                const lockedForNonAdmin = adminOnly && !isAdminPosition;
+                                return (
+                                  <label
+                                    key={child.key}
+                                    className={`flex items-center gap-2 py-2 pl-8 pr-3 text-sm font-medium text-slate-700 ${idx < node.children!.length - 1 ? 'border-b border-slate-100' : ''} ${lockedForNonAdmin ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}
+                                  >
+                                    <span className="select-none text-slate-300">└</span>
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                                      checked={position.permissions.includes(child.key)}
+                                      disabled={!parentChecked || lockedForNonAdmin}
+                                      onChange={() => togglePermission(position.name, child.key)}
+                                    />
+                                    <span className={lockedForNonAdmin ? 'opacity-40' : ''}>{child.label}</span>
+                                    {adminOnly && !isAdminPosition && (
+                                      <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-400">เฉพาะ Admin</span>
+                                    )}
+                                  </label>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
