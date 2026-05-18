@@ -314,6 +314,10 @@ export function SettingsPage() {
     () => positions.filter((position) => position.name === 'Admin' || position.permissions.includes('apply_discount')),
     [positions],
   );
+  const nonAdminDiscountApproverPositions = useMemo(
+    () => positions.filter((position) => position.name !== 'Admin' && position.permissions.includes('apply_discount')),
+    [positions],
+  );
   const hasPrinterSettingsChange = JSON.stringify(draftPrinterSettings) !== JSON.stringify(savedPrinterSettings ?? defaultPrinterSettings);
   const printerControlsDisabled = !draftPrinterSettings.enabled;
   const printerStatus = PrinterRepository.getStatus(draftPrinterSettings);
@@ -521,6 +525,10 @@ export function SettingsPage() {
 
   const toggleDiscountApprovalRequired = async () => {
     const next = !discountApprovalRequired;
+    if (next && nonAdminDiscountApproverPositions.length === 0) {
+      toast('กรุณาเปิดสิทธิ์ “ใส่ส่วนลด” ให้ตำแหน่งอื่นก่อน จึงจะเปิดการอนุมัติส่วนลดได้', 'error');
+      return;
+    }
     setIsSavingDiscountApproval(true);
     try {
       await SettingsRepository.setSetting(DISCOUNT_APPROVAL_REQUIRED_KEY, String(next), { sync: true });
