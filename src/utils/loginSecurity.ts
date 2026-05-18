@@ -6,13 +6,16 @@ export type LoginSecurityConfig = {
   pinMaxAttempts: number;
 };
 
+export type BlockReason = 'manual' | 'password' | 'pin';
+
 export type LoginSecurityState = {
   passwordFailuresByUserId: Record<string, number>;
   blockedUserIds: string[];
-  blockedAtByUserId: Record<string, string>; // ISO timestamp ของเวลาที่ถูกบล็อก (per user)
+  blockedAtByUserId: Record<string, string>;
+  blockReasonByUserId: Record<string, BlockReason>;
   pinFailures: number;
   pinBlocked: boolean;
-  pinBlockedAt: string | null; // ISO timestamp ของเวลาที่ PIN ถูกบล็อก
+  pinBlockedAt: string | null;
 };
 
 export const defaultLoginSecurityConfig: LoginSecurityConfig = {
@@ -24,6 +27,7 @@ export const defaultLoginSecurityState: LoginSecurityState = {
   passwordFailuresByUserId: {},
   blockedUserIds: [],
   blockedAtByUserId: {},
+  blockReasonByUserId: {},
   pinFailures: 0,
   pinBlocked: false,
   pinBlockedAt: null,
@@ -57,6 +61,9 @@ export function parseLoginSecurityState(value?: string | null): LoginSecuritySta
       blockedAtByUserId: parsed?.blockedAtByUserId && typeof parsed.blockedAtByUserId === 'object'
         ? parsed.blockedAtByUserId
         : {},
+      blockReasonByUserId: parsed?.blockReasonByUserId && typeof parsed.blockReasonByUserId === 'object'
+        ? parsed.blockReasonByUserId
+        : {},
       pinFailures: Math.max(0, Number(parsed?.pinFailures ?? 0) || 0),
       pinBlocked: Boolean(parsed?.pinBlocked),
       pinBlockedAt: typeof parsed?.pinBlockedAt === 'string' ? parsed.pinBlockedAt : null,
@@ -73,4 +80,20 @@ export function isUserLoginBlocked(userId: string | undefined, state: LoginSecur
 export function getBlockedAt(userId: string | undefined, state: LoginSecurityState): string | null {
   if (!userId) return null;
   return state.blockedAtByUserId[userId] ?? null;
+}
+
+export function getBlockReason(userId: string | undefined, state: LoginSecurityState): BlockReason | null {
+  if (!userId) return null;
+  return (state.blockReasonByUserId[userId] as BlockReason) ?? null;
+}
+
+const BLOCK_REASON_LABELS: Record<BlockReason, string> = {
+  manual: 'Admin บล็อก',
+  password: 'รหัสผ่านผิดเกินกำหนด',
+  pin: 'PIN ผิดเกินกำหนด',
+};
+
+export function getBlockReasonLabel(reason: BlockReason | null): string {
+  if (!reason) return '—';
+  return BLOCK_REASON_LABELS[reason] ?? '—';
 }

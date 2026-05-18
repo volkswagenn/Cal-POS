@@ -59,12 +59,17 @@ export function LoginPage() {
     const attempts = (state.passwordFailuresByUserId[targetUser.id] ?? 0) + 1;
     const blocked = attempts >= config.passwordMaxAttempts;
     const blockedAtByUserId = { ...state.blockedAtByUserId };
-    if (blocked) blockedAtByUserId[targetUser.id] = nowIso();
+    const blockReasonByUserId = { ...state.blockReasonByUserId };
+    if (blocked) {
+      blockedAtByUserId[targetUser.id] = nowIso();
+      blockReasonByUserId[targetUser.id] = 'password';
+    }
     await saveLoginSecurityState({
       ...state,
       passwordFailuresByUserId: { ...state.passwordFailuresByUserId, [targetUser.id]: attempts },
       blockedUserIds: blocked ? [...new Set([...state.blockedUserIds, targetUser.id])] : state.blockedUserIds,
       blockedAtByUserId,
+      blockReasonByUserId,
     });
     if (blocked) toast(`บัญชี ${targetUser.displayName} ถูกบล็อกจากการใส่รหัสผ่านผิดครบ ${config.passwordMaxAttempts} ครั้ง`, 'error');
   };
@@ -75,10 +80,13 @@ export function LoginPage() {
     delete passwordFailuresByUserId[targetUser.id];
     const blockedAtByUserId = { ...state.blockedAtByUserId };
     delete blockedAtByUserId[targetUser.id];
+    const blockReasonByUserId = { ...state.blockReasonByUserId };
+    delete blockReasonByUserId[targetUser.id];
     await saveLoginSecurityState({
       ...state,
       passwordFailuresByUserId,
       blockedAtByUserId,
+      blockReasonByUserId,
       blockedUserIds: state.blockedUserIds.filter((id) => id !== targetUser.id),
       pinFailures: 0,
       pinBlocked: false,

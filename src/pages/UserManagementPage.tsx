@@ -15,7 +15,7 @@ import { defaultPositions, hasPermission, parsePositions, PERMISSION_TREE, posit
 import { requestSync } from '../services/api/syncScheduler';
 import { nowIso } from '../utils/date';
 import { formatDateTime } from '../utils/date';
-import { LOGIN_SECURITY_STATE_KEY, getBlockedAt, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
+import { LOGIN_SECURITY_STATE_KEY, getBlockedAt, getBlockReason, getBlockReasonLabel, isUserLoginBlocked, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
 
 const ADMIN_ROLE = 'Admin';
 const adminPermissions = PERMISSION_TREE.flatMap((node) => [node.key, ...(node.children?.map((child) => child.key) ?? [])]);
@@ -252,16 +252,20 @@ export function UserManagementPage() {
     }
     const passwordFailuresByUserId = { ...loginSecurityState.passwordFailuresByUserId };
     const blockedAtByUserId = { ...loginSecurityState.blockedAtByUserId };
+    const blockReasonByUserId = { ...loginSecurityState.blockReasonByUserId };
     if (blocked) {
       delete passwordFailuresByUserId[user.id];
       delete blockedAtByUserId[user.id];
+      delete blockReasonByUserId[user.id];
     } else {
       blockedAtByUserId[user.id] = nowIso();
+      blockReasonByUserId[user.id] = 'manual';
     }
     await updateLoginSecurityState({
       ...loginSecurityState,
       passwordFailuresByUserId,
       blockedAtByUserId,
+      blockReasonByUserId,
       blockedUserIds: blocked
         ? loginSecurityState.blockedUserIds.filter((id) => id !== user.id)
         : [...new Set([...loginSecurityState.blockedUserIds, user.id])],
@@ -393,7 +397,7 @@ export function UserManagementPage() {
                     <th>ตำแหน่ง</th>
                     <th>PIN</th>
                     <th>สถานะ</th>
-                    <th>เวลาที่ถูกบล็อก</th>
+                    <th>สาเหตุ / เวลาที่ถูกบล็อก</th>
                     <th className="p-3 text-right">จัดการ</th>
                   </tr>
                 </thead>
@@ -427,9 +431,14 @@ export function UserManagementPage() {
                       </td>
                       <td>
                         {getBlockedAt(user.id, loginSecurityState) ? (
-                          <span className="text-xs text-slate-500">
-                            {formatDateTime(getBlockedAt(user.id, loginSecurityState)!)}
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-bold text-slate-600">
+                              {getBlockReasonLabel(getBlockReason(user.id, loginSecurityState))}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {formatDateTime(getBlockedAt(user.id, loginSecurityState)!)}
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-xs text-slate-300">—</span>
                         )}
