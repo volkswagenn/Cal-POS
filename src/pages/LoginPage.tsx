@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Delete, Eye, EyeOff, LockKeyhole, RotateCcw, UserRound } from 'lucide-react';
 import { UserRepository, ADMIN_RESET_PIN } from '../db/repositories/UserRepository';
@@ -20,6 +20,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [pin, setPin] = useState('');
   const [pinShake, setPinShake] = useState(false);
+  const [pinLoginBlocked, setPinLoginBlocked] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetPin, setResetPin] = useState('');
   const [resetError, setResetError] = useState('');
@@ -36,6 +37,20 @@ export function LoginPage() {
   const saveLoginSecurityState = async (state: LoginSecurityState) => {
     await SettingsRepository.setSetting(LOGIN_SECURITY_STATE_KEY, JSON.stringify(state), { sync: true });
   };
+
+  useEffect(() => {
+    let mounted = true;
+    readLoginSecurity().then(({ state }) => {
+      if (mounted) setPinLoginBlocked(state.pinBlocked);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'pin' || !pinLoginBlocked) return;
+    setPin('');
+    toast('PIN ถูกบล็อก กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+  }, [mode, pinLoginBlocked, toast]);
 
   const recordPasswordFailure = async (targetUser?: User | null) => {
     if (!targetUser) return;
@@ -61,6 +76,7 @@ export function LoginPage() {
       pinFailures: 0,
       pinBlocked: false,
     });
+    setPinLoginBlocked(false);
   };
 
   const recordPinFailure = async () => {
@@ -68,7 +84,11 @@ export function LoginPage() {
     const pinFailures = state.pinFailures + 1;
     const pinBlocked = pinFailures >= config.pinMaxAttempts;
     await saveLoginSecurityState({ ...state, pinFailures, pinBlocked });
-    if (pinBlocked) toast('PIN ถูกบล็อกแล้ว กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+    if (pinBlocked) {
+      setPinLoginBlocked(true);
+      setPin('');
+      toast('PIN ถูกบล็อกแล้ว กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+    }
   };
 
   const clearPinFailures = async () => {
@@ -96,6 +116,8 @@ export function LoginPage() {
       return;
     }
     if (mode === 'pin' && state.pinBlocked) {
+      setPinLoginBlocked(true);
+      setPin('');
       toast('PIN ถูกบล็อก กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
       return;
     }
@@ -137,12 +159,17 @@ export function LoginPage() {
   };
 
   const pressLoginPin = async (digit: string) => {
+    if (pinLoginBlocked) {
+      toast('PIN ถูกบล็อก กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
+      return;
+    }
     if (pin.length >= LOGIN_PIN_LENGTH) return;
     const next = pin + digit;
     setPin(next);
     if (next.length === LOGIN_PIN_LENGTH) {
       const { state } = await readLoginSecurity();
       if (state.pinBlocked) {
+        setPinLoginBlocked(true);
         setPin('');
         toast('PIN ถูกบล็อก กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่าน', 'error');
         return;
@@ -176,6 +203,7 @@ export function LoginPage() {
         toast('เซิร์ฟเวอร์ออฟไลน์ — ใช้งานแบบเครื่องเดียวชั่วคราว ข้อมูลจะไม่ sync', 'error');
       }
       await clearPinFailures();
+      setPinLoginBlocked(false);
       setSession(user, tokens);
       toast(`ยินดีต้อนรับ ${user.displayName}`, 'success');
       navigate('/select');
@@ -217,7 +245,7 @@ export function LoginPage() {
       {mode === 'pin' ? (
         <div className="w-full max-w-xs overflow-hidden rounded-2xl bg-white shadow-panel">
           {/* Header */}
-          <div className="bg-primary-600 px-5 py-5 text-center text-white">
+          <div className={`${pinLoginBlocked ? 'bg-red-600' : 'bg-primary-600'} px-5 py-5 text-center text-white`}>
             <div className="text-2xl font-black">Cal POS</div>
             <p className="mt-0.5 text-sm font-medium opacity-90">ใส่ PIN เพื่อเข้าสู่ระบบ</p>
           </div>
@@ -236,11 +264,18 @@ export function LoginPage() {
             ))}
           </div>
 
+          {pinLoginBlocked && (
+            <div className="mx-4 mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-center text-xs font-black text-red-700">
+              PIN ถูกบล็อก
+              <div className="mt-0.5 font-bold text-red-600">กรุณาเข้าสู่ระบบด้วยชื่อผู้ใช้/รหัสผ่านเพื่อปลดล็อก</div>
+            </div>
+          )}
+
           {/* Numpad */}
           <div className="grid grid-cols-3 gap-px border-t border-slate-200 bg-slate-200">
             {['1','2','3','4','5','6','7','8','9'].map((d) => (
-              <button key={d} type="button" onClick={() => pressLoginPin(d)}
-                className="bg-white py-5 text-2xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700">
+              <button key={d} type="button" onClick={() => pressLoginPin(d)} disabled={pinLoginBlocked}
+                className="bg-white py-5 text-2xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300">
                 {d}
               </button>
             ))}
@@ -248,12 +283,12 @@ export function LoginPage() {
               className="bg-white py-5 text-xs font-bold text-slate-400 active:bg-slate-50">
               รหัสผ่าน
             </button>
-            <button type="button" onClick={() => pressLoginPin('0')}
-              className="bg-white py-5 text-2xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700">
+            <button type="button" onClick={() => pressLoginPin('0')} disabled={pinLoginBlocked}
+              className="bg-white py-5 text-2xl font-black text-slate-800 active:bg-primary-50 active:text-primary-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300">
               0
             </button>
-            <button type="button" onClick={() => setPin((p) => p.slice(0, -1))} disabled={pin.length === 0}
-              className="flex items-center justify-center bg-white py-5 active:bg-slate-50 disabled:opacity-30">
+            <button type="button" onClick={() => setPin((p) => p.slice(0, -1))} disabled={pinLoginBlocked || pin.length === 0}
+              className="flex items-center justify-center bg-white py-5 active:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30">
               <Delete size={22} className="text-slate-600" />
             </button>
           </div>

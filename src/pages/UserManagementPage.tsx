@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
-import { AlertTriangle, Edit3, Eye, EyeOff, KeyRound, Plus, Save, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Edit3, Eye, EyeOff, KeyRound, Lock, Plus, Save, ShieldCheck, Trash2, Unlock, Users } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { LoadingOverlay } from '../components/common/LoadingOverlay';
@@ -397,7 +397,9 @@ export function UserManagementPage() {
                           {user.role}
                         </span>
                       </td>
-                      <td className="font-mono">{user.pin}</td>
+                      <td className="font-mono">
+                        {isCurrentUserAdmin ? user.pin : <span className="text-slate-400">••••••</span>}
+                      </td>
                       <td>
                         <span className={`text-xs font-bold ${user.isActive ? 'text-emerald-600' : 'text-slate-400'}`}>
                           {user.isActive ? 'ใช้งาน' : 'ปิด'}
@@ -424,12 +426,12 @@ export function UserManagementPage() {
                             {user.isActive ? <Eye size={16} /> : <EyeOff size={16} />}
                           </button>
                           <button
-                            className={`rounded-md p-2 ${isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}
+                            className={`rounded-md p-2 ${isUserLoginBlocked(user.id, loginSecurityState) ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-200' : 'bg-red-50 text-red-600 ring-1 ring-red-100 hover:bg-red-100'}`}
                             onClick={() => handleToggleLoginBlocked(user)}
                             aria-label={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อก login' : 'บล็อก login'}
                             title={isUserLoginBlocked(user.id, loginSecurityState) ? 'ปลดล็อกการลงชื่อเข้าใช้' : 'บล็อกการลงชื่อเข้าใช้'}
                           >
-                            <KeyRound size={16} />
+                            {isUserLoginBlocked(user.id, loginSecurityState) ? <Unlock size={16} /> : <Lock size={16} />}
                           </button>
                           <button
                             className={`rounded-md p-2 ${isLastActiveAdmin(user) ? 'cursor-not-allowed bg-slate-50 text-slate-300' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
@@ -644,6 +646,7 @@ export function UserManagementPage() {
             <label className="block text-sm font-bold text-slate-700">
               PIN <span className="font-normal text-xs text-slate-400">(ตัวเลข 6 หลัก)</span>
               <input
+                type={isCurrentUserAdmin ? 'text' : 'password'}
                 inputMode="numeric"
                 className="mt-1 w-full rounded-md border-slate-300 text-center text-xl font-black tracking-widest"
                 placeholder="000000"
