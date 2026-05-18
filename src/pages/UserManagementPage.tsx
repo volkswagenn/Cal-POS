@@ -69,7 +69,6 @@ export function UserManagementPage() {
   const toast = useToast();
   const currentUser = useAuthStore((state) => state.user);
   const isCurrentUserAdmin = currentUser?.role === ADMIN_ROLE;
-  const canBlockUsers = isCurrentUserAdmin || hasPermission(currentUser?.role, savedPositions, 'unblock_user');
 
   const savedPositions = useMemo(() => parsePositions(positionSetting), [positionSetting]);
   const loginSecurityState = useMemo(() => parseLoginSecurityState(loginSecurityStateSetting), [loginSecurityStateSetting]);
@@ -79,6 +78,7 @@ export function UserManagementPage() {
     [positionNames],
   );
   const hasPositionChange = JSON.stringify(positionDrafts) !== JSON.stringify(savedPositions);
+  const canBlockUsers = isCurrentUserAdmin || hasPermission(currentUser?.role, savedPositions, 'unblock_user');
 
   // Track which tab the user wants to switch to when there are unsaved changes
   const [pendingTab, setPendingTab] = useState<UserTab | null>(null);
