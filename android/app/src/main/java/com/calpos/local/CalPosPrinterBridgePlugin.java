@@ -387,6 +387,8 @@ public class CalPosPrinterBridgePlugin extends Plugin {
         return result;
     }
 
+    private static final int USB_CHUNK_SIZE = 4096;
+
     private int writeUsb(UsbManager usbManager, UsbDevice device, byte[] bytes) throws Exception {
         UsbDeviceConnection conn = usbManager.openDevice(device);
         if (conn == null) throw new Exception("ไม่สามารถเปิด USB ได้ กรุณาอนุญาต permission ก่อน");
@@ -398,9 +400,22 @@ public class CalPosPrinterBridgePlugin extends Plugin {
                     UsbEndpoint ep = iface.getEndpoint(j);
                     if (ep.getDirection() == UsbConstants.USB_DIR_OUT
                             && ep.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK) {
-                        int written = conn.bulkTransfer(ep, bytes, bytes.length, 8000);
+                        int totalWritten = 0;
+                        int offset = 0;
+                        while (offset < bytes.length) {
+                            int chunkLen = Math.min(USB_CHUNK_SIZE, bytes.length - offset);
+                            byte[] chunk = new byte[chunkLen];
+                            System.arraycopy(bytes, offset, chunk, 0, chunkLen);
+                            int written = conn.bulkTransfer(ep, chunk, chunkLen, 5000);
+                            if (written < 0) {
+                                conn.releaseInterface(iface);
+                                throw new Exception("USB transfer failed at offset " + offset);
+                            }
+                            totalWritten += written;
+                            offset += chunkLen;
+                        }
                         conn.releaseInterface(iface);
-                        return written;
+                        return totalWritten;
                     }
                 }
                 conn.releaseInterface(iface);
