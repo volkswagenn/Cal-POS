@@ -693,6 +693,7 @@ export function SettingsPage() {
   const applyPrinterDevice = (device: PrinterDeviceCandidate) => {
     setDraftPrinterSettings((current) => ({
       ...current,
+      enabled: true,
       printerName: device.name,
       usbVendorId: device.type === 'usb' ? device.vendorId ?? device.id.split(':')[0] ?? '' : current.usbVendorId,
       usbProductId: device.type === 'usb' ? device.productId ?? device.id.split(':')[1] ?? '' : current.usbProductId,
@@ -713,7 +714,7 @@ export function SettingsPage() {
   };
 
   const scanPrinterDevicesForCurrentPlatform = async () => {
-    if (!draftPrinterSettings.enabled || isScanningPrinter) return;
+    if (isScanningPrinter) return;
     setPrinterScanMessage('');
     setDetectedPrinterDevices([]);
     try {
