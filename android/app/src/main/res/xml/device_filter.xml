@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  USB device filter for CalPosPrinterBridge.
+  class="7" = USB Printer class (standard for most thermal/ESC-POS printers).
+  Android uses this list to fire USB_DEVICE_ATTACHED and offer "Use by default",
+  which makes USB permission survive app restarts and device reboots.
+  Add <usb-device vendor-id="xxxx" product-id="yyyy" /> for specific models if needed.
+-->
+<resources>
+    <!-- Generic USB printer class. -->
+    <usb-device class="7" />
+    <!-- Printer-80 (NXP-based, enumerates as vendor-specific, not class 7).
+         NOTE: vendor-id / product-id here are DECIMAL, not hex.
+         hex 1fc9 = 8137, hex 2016 = 8214. -->
+    <usb-device vendor-id="8137" product-id="8214" />
+</resources>

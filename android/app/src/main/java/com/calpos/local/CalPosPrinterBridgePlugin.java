@@ -136,19 +136,14 @@ public class CalPosPrinterBridgePlugin extends Plugin {
         boolean cut = Boolean.TRUE.equals(call.getBoolean("cut", true));
         int feed    = call.getInt("feedLines", 3);
 
-        UsbManager usbManager = (UsbManager) getContext().getSystemService(Context.USB_SERVICE);
-        UsbDevice device = findDevice(usbManager, vendorId, productId);
-        if (device == null) { call.reject("USB device not found"); return; }
-        try {
+        withUsbPermission(call, vendorId, productId, (usbManager, device) -> {
             byte[] bytes   = buildEscPos(text, cut, feed);
             int    written = writeUsb(usbManager, device, bytes);
             JSObject result = new JSObject();
             result.put("printed", written > 0);
             result.put("bytesWritten", written);
             call.resolve(result);
-        } catch (Exception e) {
-            call.reject(e.getMessage() != null ? e.getMessage() : "USB print failed");
-        }
+        });
     }
 
     // ─── printUsbRasterText (render bitmap → ESC/POS raster) ──────────
@@ -165,10 +160,7 @@ public class CalPosPrinterBridgePlugin extends Plugin {
         boolean cut        = Boolean.TRUE.equals(call.getBoolean("cut", true));
         int feed           = call.getInt("feedLines", 4);
 
-        UsbManager usbManager = (UsbManager) getContext().getSystemService(Context.USB_SERVICE);
-        UsbDevice device = findDevice(usbManager, vendorId, productId);
-        if (device == null) { call.reject("USB device not found"); return; }
-        try {
+        withUsbPermission(call, vendorId, productId, (usbManager, device) -> {
             Bitmap bmp   = renderTextToBitmap(text, paperWidthDots, textSizePx, feed);
             byte[] bytes = bitmapToEscPosRaster(bmp, cut);
             bmp.recycle();
@@ -177,9 +169,7 @@ public class CalPosPrinterBridgePlugin extends Plugin {
             result.put("printed", written > 0);
             result.put("bytesWritten", written);
             call.resolve(result);
-        } catch (Exception e) {
-            call.reject(e.getMessage() != null ? e.getMessage() : "USB raster print failed");
-        }
+        });
     }
 
     // ─── openUsbDrawer ────────────────────────────────────────────────
@@ -193,10 +183,7 @@ public class CalPosPrinterBridgePlugin extends Plugin {
         int onMs  = Math.max(1, Math.min(255, call.getInt("pulseOnMs",  25)));
         int offMs = Math.max(1, Math.min(255, call.getInt("pulseOffMs", 25)));
 
-        UsbManager usbManager = (UsbManager) getContext().getSystemService(Context.USB_SERVICE);
-        UsbDevice device = findDevice(usbManager, vendorId, productId);
-        if (device == null) { call.reject("USB device not found"); return; }
-        try {
+        withUsbPermission(call, vendorId, productId, (usbManager, device) -> {
             byte pinByte = pin == 5 ? (byte) 0x01 : (byte) 0x00;
             byte[] cmd = {0x1B, 0x70, pinByte, (byte) onMs, (byte) offMs};
             int written = writeUsb(usbManager, device, cmd);
@@ -204,9 +191,7 @@ public class CalPosPrinterBridgePlugin extends Plugin {
             result.put("opened", written > 0);
             result.put("bytesWritten", written);
             call.resolve(result);
-        } catch (Exception e) {
-            call.reject(e.getMessage() != null ? e.getMessage() : "Drawer open failed");
-        }
+        });
     }
 
     // ─── printLanText (plain ESC/POS) ─────────────────────────────────
@@ -351,6 +336,74 @@ public class CalPosPrinterBridgePlugin extends Plugin {
         byte[] result = new byte[buf.size()];
         for (int i = 0; i < buf.size(); i++) result[i] = buf.get(i);
         return result;
+    }
+
+    // ─── Permission-aware USB execution ───────────────────────────────
+
+    private interface UsbAction {
+        void run(UsbManager usbManager, UsbDevice device) throws Exception;
+    }
+
+    /**
+     * Run a USB action, transparently acquiring permission first if needed.
+     *
+     * Android drops USB permission on every reboot / unplug, so a print issued right
+     * after the device was power-cycled would otherwise fail with
+     * "ไม่สามารถเปิด USB ได้". Here we check hasPermission(); if missing we pop the
+     * system permission dialog (granted silently when the user previously ticked
+     * "use by default") and only then perform the print/drawer write — so the action
+     * self-heals instead of hard-failing.
+     */
+    private void withUsbPermission(PluginCall call, String vendorId, String productId, UsbAction action) {
+        UsbManager usbManager = (UsbManager) getContext().getSystemService(Context.USB_SERVICE);
+        UsbDevice device = findDevice(usbManager, vendorId, productId);
+        if (device == null) { call.reject("USB device not found"); return; }
+
+        if (usbManager.hasPermission(device)) {
+            runUsbAction(call, usbManager, device, action);
+            return;
+        }
+
+        Intent intent = new Intent(ACTION_USB_PERMISSION);
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0;
+        PendingIntent pi = PendingIntent.getBroadcast(getContext(), 0, intent, flags);
+
+        BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent broadcastIntent) {
+                ctx.unregisterReceiver(this);
+                boolean granted = broadcastIntent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                if (!granted) {
+                    call.reject("ไม่สามารถเปิด USB ได้ กรุณาอนุญาต permission ก่อน");
+                    return;
+                }
+                // The granted device instance may differ from the one we requested.
+                UsbDevice granted0 = findDevice(usbManager, vendorId, productId);
+                if (granted0 == null) { call.reject("USB device not found"); return; }
+                runUsbAction(call, usbManager, granted0, action);
+            }
+        };
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getContext().registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            @SuppressWarnings("UnspecifiedRegisterReceiverFlag")
+            Object ignored = null;
+            getContext().registerReceiver(receiver, filter);
+        }
+        usbManager.requestPermission(device, pi);
+    }
+
+    // Always run the blocking USB I/O off the main thread (the permission broadcast
+    // is delivered on the main thread, and large raster prints would ANR there).
+    private void runUsbAction(PluginCall call, UsbManager usbManager, UsbDevice device, UsbAction action) {
+        new Thread(() -> {
+            try {
+                action.run(usbManager, device);
+            } catch (Exception e) {
+                call.reject(e.getMessage() != null ? e.getMessage() : "USB operation failed");
+            }
+        }).start();
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────

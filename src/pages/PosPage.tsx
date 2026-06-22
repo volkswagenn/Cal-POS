@@ -88,6 +88,8 @@ export function PosPage() {
   const [summaryPreviewOpen, setSummaryPreviewOpen] = useState(false);
   const [summaryPrintText, setSummaryPrintText] = useState('');
   const [summaryRenderConfig, setSummaryRenderConfig] = useState<ReceiptRenderConfig | null>(null);
+  const [summaryIncludeCategories, setSummaryIncludeCategories] = useState(false);
+  const [summaryIncludeItems, setSummaryIncludeItems] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerAction, setDrawerAction] = useState<CashDrawerAction>('cash_in');
   const [drawerAmount, setDrawerAmount] = useState('');
@@ -252,9 +254,11 @@ export function PosPage() {
   };
 
   const buildSummaryPrintPreview = async () => {
-    const [printerSettings, contentSettings] = await Promise.all([
+    const [printerSettings, contentSettings, categorySales, productSales] = await Promise.all([
       PrinterRepository.getSettings(),
       getReceiptContentSettings(),
+      summaryIncludeCategories ? ReportRepository.getCategorySales(summaryDate) : Promise.resolve(undefined),
+      summaryIncludeItems ? ReportRepository.getProductSales(summaryDate) : Promise.resolve(undefined),
     ]);
     const renderConfig = getReceiptRenderConfig(printerSettings);
     const text = formatSalesSummaryText({
@@ -263,6 +267,8 @@ export function PosPage() {
       summary: dailySummary ?? { totalSales: 0, billCount: 0, totalDiscount: 0 },
       charsPerLineValue: renderConfig.charsPerLine,
       contentSettings,
+      categories: categorySales,
+      items: productSales,
     });
 
     setSummaryRenderConfig(renderConfig);
@@ -592,6 +598,17 @@ export function PosPage() {
               >
                 <Printer size={17} /> พิมพ์ใบสรุปยอด
               </button>
+            </div>
+            <div className="flex flex-wrap gap-4 rounded-md bg-slate-50 px-4 py-3">
+              <span className="text-sm font-bold text-slate-500">ตัวเลือกการพิมพ์:</span>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-700">
+                <input type="checkbox" className="rounded border-slate-300" checked={summaryIncludeCategories} onChange={(event) => setSummaryIncludeCategories(event.target.checked)} />
+                สรุปยอดขายตามหมวดหมู่
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-700">
+                <input type="checkbox" className="rounded border-slate-300" checked={summaryIncludeItems} onChange={(event) => setSummaryIncludeItems(event.target.checked)} />
+                รายการสินค้าที่ขายทั้งหมด
+              </label>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-md bg-primary-50 p-3">

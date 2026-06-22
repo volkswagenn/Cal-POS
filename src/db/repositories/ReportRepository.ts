@@ -66,4 +66,66 @@ export const ReportRepository = {
     });
     return [...map.values()];
   },
+  // Sales grouped by the product's category. sale_items don't store categoryId,
+  // so we resolve it through the product → category lookup. Items whose product
+  // was deleted fall into an "อื่นๆ" bucket so no revenue is lost.
+  async getCategorySales(startDate: string, endDate = startDate) {
+    const sales = (await db.sales.toArray()).filter((sale) => sale.status === 'completed' && inRange(sale.createdAt, startOfDayIso(startDate), endOfDayIso(endDate)));
+    const saleIds = new Set(sales.map((sale) => sale.id));
+    const [products, categories, items] = await Promise.all([
+      db.products.toArray(),
+      db.categories.toArray(),
+      db.sale_items.toArray(),
+    ]);
+    const productCategory = new Map(products.map((product) => [product.id, product.categoryId]));
+    const categoryInfo = new Map(categories.map((category) => [category.id, { name: category.name, color: category.color }]));
+    const map = new Map<string, { categoryId: string; categoryName: string; color: string; quantity: number; revenue: number }>();
+    items.filter((item) => saleIds.has(item.saleId)).forEach((item) => {
+      const categoryId = productCategory.get(item.productId) ?? '__none__';
+      const info = categoryInfo.get(categoryId);
+      const row = map.get(categoryId) ?? {
+        categoryId,
+        categoryName: info?.name ?? 'อื่นๆ',
+        color: info?.color ?? '#94a3b8',
+        quantity: 0,
+        revenue: 0,
+      };
+      row.quantity += item.quantity;
+      row.revenue += item.total;
+      map.set(categoryId, row);
+    });
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue);
+  },
+  // Cash-drawer activity for the day: how many times the drawer was opened from
+  // the POS, broken down by reason (cash in / cash out / open only) with amounts.
+  async getDrawerSummary(startDate: string, endDate = startDate) {
+    const start = startOfDayIso(startDate);
+    const end = endOfDayIso(endDate);
+    const logs = (await db.cash_drawer_logs.toArray())
+      .filter((log) => inRange(log.createdAt, start, end))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    let cashIn = 0;
+    let cashOut = 0;
+    let cashInCount = 0;
+    let cashOutCount = 0;
+    let openOnlyCount = 0;
+    let failedCount = 0;
+    logs.forEach((log) => {
+      if (log.status === 'failed') failedCount += 1;
+      if (log.action === 'cash_in') { cashIn += log.amount; cashInCount += 1; }
+      else if (log.action === 'cash_out') { cashOut += log.amount; cashOutCount += 1; }
+      else openOnlyCount += 1;
+    });
+    return {
+      totalOpens: logs.length,
+      cashIn,
+      cashOut,
+      net: cashIn - cashOut,
+      cashInCount,
+      cashOutCount,
+      openOnlyCount,
+      failedCount,
+      entries: logs,
+    };
+  },
 };

@@ -153,6 +153,9 @@ export function formatSalesSummaryText(input: {
   };
   charsPerLineValue: string;
   contentSettings?: ReceiptContentSettings;
+  // Optional extra sections, included only when provided.
+  categories?: Array<{ categoryName: string; quantity: number; revenue: number }>;
+  items?: Array<{ productName: string; quantity: number; revenue: number }>;
 }) {
   const width = Math.min(46, Math.max(30, Number(input.charsPerLineValue) || 42));
   const settings = input.contentSettings ?? defaultReceiptContentSettings;
@@ -176,6 +179,25 @@ export function formatSalesSummaryText(input: {
   if ((input.summary.totalRefund ?? 0) > 0) rows.push(columns('Refund', amount(input.summary.totalRefund ?? 0, currencySymbol), width));
   rows.push(line(width));
   rows.push(columns('ยอดขายสุทธิ', amount(input.summary.totalSales, currencySymbol), width));
+
+  if (input.categories && input.categories.length > 0) {
+    rows.push('');
+    rows.push(center('สรุปตามหมวดหมู่', width));
+    rows.push(line(width));
+    input.categories.forEach((row) => {
+      rows.push(columns(`${row.categoryName} (${row.quantity})`, amount(row.revenue, currencySymbol), width));
+    });
+  }
+
+  if (input.items && input.items.length > 0) {
+    rows.push('');
+    rows.push(center('รายการสินค้าที่ขาย', width));
+    rows.push(line(width));
+    input.items.forEach((row) => {
+      rows.push(columns(`${row.productName} x ${row.quantity}`, amount(row.revenue, currencySymbol), width));
+    });
+  }
+
   rows.push('');
   rows.push(center(`พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')}`, width));
   rows.push('');

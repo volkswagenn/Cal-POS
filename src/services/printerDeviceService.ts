@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { CalPosPrinterBridge } from '../plugins/calPosPrinterBridge';
-import type { PrinterConnectionType } from '../types';
+import type { PrinterConnectionType, PrinterSettings } from '../types';
 
 export type PrinterDeviceType = Extract<PrinterConnectionType, 'usb' | 'bluetooth'>;
 
@@ -90,9 +90,68 @@ async function authorizeAndroidUsbDevice(device: PrinterDeviceCandidate): Promis
   return { ...device, hasPermission: result.granted };
 }
 
+/**
+ * Re-acquire Android USB permission for the already-saved printer.
+ *
+ * Android does NOT keep the permission granted by UsbManager.requestPermission()
+ * across a reboot or a printer unplug/replug. After the device is power-cycled the
+ * app has the printer in its settings but no live permission, so printing fails with
+ * "ไม่สามารถเปิด USB ได้". Call this on app launch / resume: if the saved printer is
+ * plugged in but lacks permission, ask for it again. When the user previously checked
+ * "เปิด Cal POS ทุกครั้งเมื่อเชื่อมต่อ" (use by default for this device) Android re-grants
+ * silently, giving real auto-reconnect; otherwise the user confirms once.
+ *
+ * Returns:
+ *   'granted'      – permission is now available (device usable)
+ *   'no-device'    – the saved printer is not currently attached
+ *   'denied'       – device present but user/Android refused permission
+ *   'not-usb'      – not an Android USB printer, nothing to do
+ */
+export type UsbPermissionOutcome = 'granted' | 'no-device' | 'denied' | 'not-usb';
+
+// Dedupe concurrent permission requests. The live-status hook is mounted in more than
+// one place (AppLayout + SettingsPage), so without this guard a single resume could fire
+// two requestPermission() calls and stack two Android permission dialogs.
+let usbPermissionInFlight: Promise<UsbPermissionOutcome> | null = null;
+
+function ensureAndroidUsbPermission(settings: PrinterSettings): Promise<UsbPermissionOutcome> {
+  if (usbPermissionInFlight) return usbPermissionInFlight;
+  usbPermissionInFlight = ensureAndroidUsbPermissionInner(settings).finally(() => {
+    usbPermissionInFlight = null;
+  });
+  return usbPermissionInFlight;
+}
+
+async function ensureAndroidUsbPermissionInner(settings: PrinterSettings): Promise<UsbPermissionOutcome> {
+  if (Capacitor.getPlatform() !== 'android') return 'not-usb';
+  if (!settings.enabled || settings.connectionType !== 'usb') return 'not-usb';
+
+  const vid = settings.usbVendorId?.trim().toLowerCase() ?? '';
+  const pid = settings.usbProductId?.trim().toLowerCase() ?? '';
+  if (!vid && !pid) return 'not-usb';
+
+  const { devices } = await CalPosPrinterBridge.scanPrinters({ type: 'usb' });
+  const device = devices.find(
+    (d) => (vid && d.vendorId?.toLowerCase() === vid) || (pid && d.productId?.toLowerCase() === pid),
+  );
+  if (!device) return 'no-device';
+  if (device.hasPermission) return 'granted';
+
+  const result = await CalPosPrinterBridge.requestUsbPermission({
+    vendorId: device.vendorId ?? settings.usbVendorId,
+    productId: device.productId ?? settings.usbProductId,
+    deviceName: device.deviceName ?? settings.usbDeviceName,
+  });
+  return result.granted ? 'granted' : 'denied';
+}
+
 export const PrinterDeviceService = {
   platform() {
     return Capacitor.getPlatform();
+  },
+
+  ensureUsbPermission(settings: PrinterSettings) {
+    return ensureAndroidUsbPermission(settings);
   },
 
   async scan(type: PrinterConnectionType) {

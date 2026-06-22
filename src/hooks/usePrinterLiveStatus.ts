@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { PrinterRepository } from '../db/repositories/PrinterRepository';
 import { CalPosPrinterBridge } from '../plugins/calPosPrinterBridge';
+import { PrinterDeviceService } from '../services/printerDeviceService';
 import type { PrinterSettings, PrinterStatus } from '../types';
 
 const POLL_MS = 15_000;
@@ -33,9 +34,13 @@ async function probeUsb(settings: PrinterSettings): Promise<PrinterStatus> {
       const result = await CalPosPrinterBridge.scanPrinters({ type: 'usb' });
       const vid = settings.usbVendorId.toLowerCase();
       const pid = settings.usbProductId.toLowerCase();
-      return result.devices.some(
+      const found = result.devices.find(
         (d) => (vid && d.vendorId?.toLowerCase() === vid) || (pid && d.productId?.toLowerCase() === pid),
-      ) ? 'connected' : 'disconnected';
+      );
+      if (!found) return 'disconnected';
+      // Device present but USB permission was revoked (e.g. after reboot) = not usable
+      if (found.hasPermission === false) return 'disconnected';
+      return 'connected';
     } catch {
       return 'disconnected';
     }
@@ -76,6 +81,7 @@ export function usePrinterLiveStatus(): PrinterStatus {
   useEffect(() => {
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | null = null;
+    let authInFlight = false;
 
     const check = async () => {
       if (cancelled) return;
@@ -93,19 +99,52 @@ export function usePrinterLiveStatus(): PrinterStatus {
       }
     };
 
+    // Android loses USB permission after a reboot/replug. Re-acquire it when the app
+    // starts or returns to the foreground so the saved printer reconnects automatically
+    // (silently if the user ticked "use by default"), instead of staying disconnected
+    // until they re-pick the printer in Settings.
+    const autoAuthorize = async () => {
+      if (cancelled || authInFlight) return;
+      if (Capacitor.getPlatform() !== 'android') return;
+      authInFlight = true;
+      try {
+        const settings = await PrinterRepository.getSettings();
+        if (cancelled) return;
+        const outcome = await PrinterDeviceService.ensureUsbPermission(settings);
+        if (cancelled) return;
+        if (outcome === 'granted') void check();
+      } catch {
+        // ignore — next resume will retry
+      } finally {
+        authInFlight = false;
+      }
+    };
+
     const onSettingsUpdated = () => {
       if (timerId) clearTimeout(timerId);
       timerId = null;
       void check();
     };
 
+    const onResume = () => {
+      if (document.visibilityState !== 'visible') return;
+      void autoAuthorize();
+    };
+
     void check();
+    void autoAuthorize();
     window.addEventListener('calpos:printer-settings-updated', onSettingsUpdated);
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('focus', onResume);
+    document.addEventListener('resume', onResume); // Capacitor app-resume event
 
     return () => {
       cancelled = true;
       if (timerId) clearTimeout(timerId);
       window.removeEventListener('calpos:printer-settings-updated', onSettingsUpdated);
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('focus', onResume);
+      document.removeEventListener('resume', onResume);
     };
   }, []);
 
