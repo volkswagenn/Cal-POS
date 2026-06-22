@@ -21,6 +21,25 @@ export function downloadXlsx(headers: string[], rows: Array<Array<string | numbe
   XLSX.writeFile(workbook, fileName);
 }
 
+// Export a raw array-of-arrays sheet (for reports that need a title/summary block
+// above the table, not just a flat header+rows grid). Column widths can be given
+// explicitly, otherwise they auto-size to the widest cell in each column.
+export function downloadXlsxAoa(
+  aoa: Array<Array<string | number>>,
+  sheetName: string,
+  fileName: string,
+  colWidths?: number[],
+) {
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+  const columnCount = aoa.reduce((max, row) => Math.max(max, row.length), 0);
+  worksheet['!cols'] = Array.from({ length: columnCount }, (_, index) => ({
+    wch: colWidths?.[index] ?? Math.max(10, ...aoa.map((row) => String(row[index] ?? '').length + 2)),
+  }));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, fileName);
+}
+
 export async function updateReportFile(content: string, fileName: string) {
   const picker = (window as unknown as { showSaveFilePicker?: (options: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker;
   if (!picker) {

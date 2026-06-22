@@ -106,6 +106,7 @@ export const ReportRepository = {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     let cashIn = 0;
     let cashOut = 0;
+    let exchangeTotal = 0;
     let cashInCount = 0;
     let cashOutCount = 0;
     let openOnlyCount = 0;
@@ -114,12 +115,13 @@ export const ReportRepository = {
       if (log.status === 'failed') failedCount += 1;
       if (log.action === 'cash_in') { cashIn += log.amount; cashInCount += 1; }
       else if (log.action === 'cash_out') { cashOut += log.amount; cashOutCount += 1; }
-      else openOnlyCount += 1;
+      else { exchangeTotal += log.amount; openOnlyCount += 1; } // open_only is now "แลกเงิน"
     });
     return {
       totalOpens: logs.length,
       cashIn,
       cashOut,
+      exchangeTotal,
       net: cashIn - cashOut,
       cashInCount,
       cashOutCount,

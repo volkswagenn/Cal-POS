@@ -40,6 +40,45 @@ const METHOD_LABEL: Record<string, string> = {
   mixed: 'หลายช่องทาง',
 };
 
+// Quick descriptive tags for naming a parked bill (identify the customer by appearance).
+// Each group is single-select; chosen values are joined into the parked-bill name.
+const PARK_TAG_GROUPS: Array<{ key: string; label: string; options: Array<{ label: string; value: string }> }> = [
+  { key: 'gender', label: 'เพศ', options: [
+    { label: 'ผู้ชาย', value: 'ผู้ชาย' },
+    { label: 'ผู้หญิง', value: 'ผู้หญิง' },
+  ] },
+  { key: 'hair', label: 'ผม', options: [
+    { label: 'สั้น', value: 'ผมสั้น' },
+    { label: 'ยาว', value: 'ผมยาว' },
+  ] },
+  { key: 'sleeve', label: 'แขนเสื้อ', options: [
+    { label: 'แขนสั้น', value: 'แขนสั้น' },
+    { label: 'แขนยาว', value: 'แขนยาว' },
+  ] },
+  { key: 'shirtColor', label: 'สีเสื้อ', options: [
+    { label: 'ขาว', value: 'เสื้อขาว' },
+    { label: 'ดำ', value: 'เสื้อดำ' },
+    { label: 'แดง', value: 'เสื้อแดง' },
+    { label: 'น้ำเงิน', value: 'เสื้อน้ำเงิน' },
+    { label: 'ฟ้า', value: 'เสื้อฟ้า' },
+    { label: 'เหลือง', value: 'เสื้อเหลือง' },
+    { label: 'ส้ม', value: 'เสื้อส้ม' },
+    { label: 'เขียว', value: 'เสื้อเขียว' },
+    { label: 'ชมพู', value: 'เสื้อชมพู' },
+    { label: 'ม่วง', value: 'เสื้อม่วง' },
+    { label: 'น้ำตาล', value: 'เสื้อน้ำตาล' },
+    { label: 'เทา', value: 'เสื้อเทา' },
+  ] },
+  { key: 'pants', label: 'กางเกง', options: [
+    { label: 'ขาสั้น', value: 'ขาสั้น' },
+    { label: 'ขายาว', value: 'ขายาว' },
+  ] },
+];
+
+function composeParkTagName(tags: Record<string, string>) {
+  return PARK_TAG_GROUPS.map((group) => tags[group.key]).filter(Boolean).join(' ');
+}
+
 const billStatusTabs: Array<{ value: '' | SaleStatus; label: string }> = [
   { value: 'completed', label: 'สำเร็จ' },
   { value: 'voided', label: 'Void' },
@@ -80,6 +119,7 @@ export function PosPage() {
   const [parkedOpen, setParkedOpen] = useState(false);
   const [parkNameOpen, setParkNameOpen] = useState(false);
   const [parkName, setParkName] = useState('');
+  const [parkTags, setParkTags] = useState<Record<string, string>>({});
   const [renamingParkedId, setRenamingParkedId] = useState<string | null>(null);
   const [renamingParkedName, setRenamingParkedName] = useState('');
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -188,7 +228,20 @@ export function PosPage() {
       return;
     }
     setParkName('');
+    setParkTags({});
     setParkNameOpen(true);
+  };
+
+  // Toggle a quick tag; rebuild the parked-bill name from the selected tags. Selecting
+  // the same chip again clears that group.
+  const toggleParkTag = (groupKey: string, value: string) => {
+    setParkTags((current) => {
+      const next = { ...current };
+      if (next[groupKey] === value) delete next[groupKey];
+      else next[groupKey] = value;
+      setParkName(composeParkTagName(next));
+      return next;
+    });
   };
 
   const saveParkedBill = async () => {
@@ -209,6 +262,7 @@ export function PosPage() {
     });
     cart.clear();
     setParkName('');
+    setParkTags({});
     setParkNameOpen(false);
     toast(`พักบิลแล้ว ${totals.itemCount} ชิ้น ยอด ${money(totals.grandTotal)}`, 'success');
     setParkedOpen(true);
@@ -330,10 +384,15 @@ export function PosPage() {
   };
 
   const openCashDrawer = async () => {
+    const amount = Number(drawerAmount || 0);
+    if (!(amount > 0)) {
+      toast('กรุณาใส่จำนวนเงินทุกครั้ง', 'error');
+      return;
+    }
     const log = await PrinterRepository.openDrawer({
       user,
       action: drawerAction,
-      amount: Math.max(0, Number(drawerAmount || 0)),
+      amount,
       note: drawerNote.trim(),
     });
     if (log.status === 'success') toast('บันทึกการเปิดลิ้นชักแล้ว', 'success');
@@ -458,7 +517,7 @@ export function PosPage() {
                 <select className="border-0 border-r border-slate-300 bg-slate-50 font-black focus:ring-0" value={drawerAction} onChange={(event) => setDrawerAction(event.target.value as CashDrawerAction)}>
                   <option value="cash_in">นำเงินเข้า</option>
                   <option value="cash_out">นำเงินออก</option>
-                  <option value="open_only">เปิดอย่างเดียว</option>
+                  <option value="open_only">แลกเงิน</option>
                 </select>
                 <input
                   type="number"
@@ -467,7 +526,6 @@ export function PosPage() {
                   value={drawerAmount}
                   onChange={(event) => setDrawerAmount(event.target.value)}
                   placeholder="0"
-                  disabled={drawerAction === 'open_only'}
                 />
               </div>
             </label>
@@ -491,6 +549,27 @@ export function PosPage() {
                 <span>{cart.summary().itemCount.toLocaleString('th-TH')} ชิ้น</span>
                 <span>{money(cart.summary().grandTotal)}</span>
               </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-bold text-slate-700">เลือกลักษณะลูกค้า (กดเพื่อตั้งชื่ออัตโนมัติ)</div>
+              {PARK_TAG_GROUPS.map((group) => (
+                <div key={group.key} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-16 shrink-0 text-xs font-bold text-slate-500">{group.label}</span>
+                  {group.options.map((option) => {
+                    const active = parkTags[group.key] === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => toggleParkTag(group.key, option.value)}
+                        className={`rounded-full px-3 py-1 text-sm font-bold transition ${active ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
             <label className="block text-sm font-bold text-slate-700">
               ชื่อบิลพัก (ไม่บังคับ)

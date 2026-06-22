@@ -6,12 +6,11 @@ import { PrinterOutputService } from '../../services/printerOutputService';
 import { formatReceiptText } from '../../services/receiptTextFormatter';
 import {
   getReceiptContentSettings,
-  getReceiptPreviewShellStyle,
-  getReceiptPreviewStyle,
   getReceiptRenderConfig,
   RECEIPT_SETTINGS_UPDATED_EVENT,
   type ReceiptRenderConfig,
 } from '../../services/receiptLayoutService';
+import { ReceiptCanvasPreview } from './ReceiptCanvasPreview';
 import { money } from '../../utils/money';
 import { Modal } from '../common/Modal';
 import { useToast } from '../common/Toast';
@@ -132,11 +131,9 @@ export function ReceiptModal({ detail, onClose }: { detail: SaleDetail; onClose:
         <div className="text-5xl font-black leading-tight text-emerald-800">{money(change)}</div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="print-receipt mx-auto bg-white print:max-w-none" style={renderConfig ? getReceiptPreviewShellStyle(renderConfig, 0.5) : undefined}>
+        <div className="print-receipt mx-auto bg-white print:max-w-none" style={renderConfig ? { width: `${Math.ceil(renderConfig.paperWidthDots * 0.5)}px` } : undefined}>
           {renderConfig && (
-            <pre className="whitespace-pre-wrap bg-white text-black shadow-sm" style={getReceiptPreviewStyle(renderConfig, 0.5)}>
-              {receiptText}
-            </pre>
+            <ReceiptCanvasPreview text={receiptText} config={renderConfig} scale={0.5} />
           )}
         </div>
       </div>

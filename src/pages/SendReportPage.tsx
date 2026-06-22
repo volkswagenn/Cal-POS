@@ -5,16 +5,23 @@ import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { ExternalReportPreview } from '../components/reports/ExternalReportPreview';
 import { ExternalReportRepository, type PreviewRow } from '../db/repositories/ExternalReportRepository';
+import { ReportRepository } from '../db/repositories/ReportRepository';
 import type { ExportMode } from '../types';
 import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
-import { downloadBlob, downloadCsv, downloadXlsx } from '../utils/exportFile';
+import { downloadBlob, downloadCsv, downloadXlsx, downloadXlsxAoa } from '../utils/exportFile';
 import { money } from '../utils/money';
 import { hasApiBaseUrl } from '../services/api/client';
 import { reportsApi } from '../services/api/reportsApi';
 
 const REPORT_TYPE = 'payment_income' as const;
 const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+const DRAWER_ACTION_LABEL: Record<string, string> = {
+  cash_in: 'นำเงินเข้า',
+  cash_out: 'นำเงินออก',
+  open_only: 'แลกเงิน',
+};
 
 function dateRange(year: number, month: number, mode: string, from: string, to: string) {
   const today = new Date();
@@ -118,6 +125,47 @@ export function SendReportPage() {
     toast(`ส่งออก ${fileName} แล้ว`, 'success');
   };
 
+  const downloadDrawerReport = async () => {
+    const drawer = await ReportRepository.getDrawerSummary(dateFrom, dateTo);
+    const entries = [...drawer.entries].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const rangeLabel = dateFrom === dateTo ? dateFrom : `${dateFrom} ถึง ${dateTo}`;
+
+    const aoa: Array<Array<string | number>> = [
+      ['รายงานการเปิดลิ้นชัก'],
+      [`ช่วงวันที่: ${rangeLabel}`],
+      [`พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}`],
+      [],
+      ['สรุป'],
+      ['จำนวนครั้งที่เปิดลิ้นชักทั้งหมด', drawer.totalOpens],
+      ['นำเงินเข้า', `${drawer.cashInCount} ครั้ง`, drawer.cashIn],
+      ['นำเงินออก', `${drawer.cashOutCount} ครั้ง`, drawer.cashOut],
+      ['แลกเงิน', `${drawer.openOnlyCount} ครั้ง`, drawer.exchangeTotal],
+      ['ยอดสุทธิ (เข้า - ออก)', '', drawer.net],
+      ['เปิดไม่สำเร็จ', `${drawer.failedCount} ครั้ง`],
+      [],
+      ['ลำดับ', 'วันที่', 'เวลา', 'ประเภทการเปิด', 'เหตุผล', 'เงินเข้า (บาท)', 'เงินออก (บาท)', 'แลกเงิน (บาท)', 'พนักงาน', 'สถานะ'],
+      ...entries.map((entry, index) => {
+        const created = new Date(entry.createdAt);
+        return [
+          index + 1,
+          created.toLocaleDateString('th-TH'),
+          created.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          DRAWER_ACTION_LABEL[entry.action] ?? entry.action,
+          entry.note || '',
+          entry.action === 'cash_in' ? entry.amount : '',
+          entry.action === 'cash_out' ? entry.amount : '',
+          entry.action === 'open_only' ? entry.amount : '',
+          entry.userName,
+          entry.status === 'failed' ? 'ไม่สำเร็จ' : 'สำเร็จ',
+        ];
+      }),
+    ];
+
+    const fileName = `รายงานการเปิดลิ้นชัก_${dateFrom}_${dateTo}.xlsx`;
+    downloadXlsxAoa(aoa, 'การเปิดลิ้นชัก', fileName, [8, 14, 8, 16, 28, 14, 14, 14, 16, 10]);
+    toast(`ส่งออก ${fileName} แล้ว (${entries.length} รายการ)`, 'success');
+  };
+
   return (
     <div className="p-4 md:p-6">
       <PageHeader title="ส่งรายงาน" subtitle="รายรับแยกประเภทการชำระเงิน" />
@@ -135,6 +183,7 @@ export function SendReportPage() {
           <div className="mb-4 flex flex-wrap gap-2">
             <button onClick={() => download('csv')} className="rounded-md bg-primary-600 px-4 py-2.5 font-bold text-white"><Download className="mr-2 inline" size={16} /> Download CSV</button>
             <button onClick={() => download('xlsx')} className="rounded-md bg-emerald-600 px-4 py-2.5 font-bold text-white"><FileSpreadsheet className="mr-2 inline" size={16} /> Download Excel</button>
+            <button onClick={() => void downloadDrawerReport()} className="rounded-md bg-amber-600 px-4 py-2.5 font-bold text-white"><FileSpreadsheet className="mr-2 inline" size={16} /> รายงานการเปิดลิ้นชัก (Excel)</button>
           </div>
           <ReportChart rows={rows} />
           <ExternalReportPreview reportType={REPORT_TYPE} rows={rows} />

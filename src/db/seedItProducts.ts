@@ -9,9 +9,16 @@ import { SyncQueueRepository } from './syncQueue';
 // will not recreate it — it is inserted once into the live database and guarded by
 // the settings flag below so it never duplicates on subsequent launches.
 const IT_SEED_FLAG = 'itProductsSeedV1';
+// Bump when the "IT " name prefix is applied to already-seeded devices.
+const IT_PREFIX_FLAG = 'itProductsPrefixV1';
 const IT_CATEGORY_ID = 'cat_it';
 const IT_CATEGORY_NAME = 'สินค้า IT';
 const IT_CATEGORY_COLOR = '#0891b2';
+const IT_NAME_PREFIX = 'IT ';
+
+function itProductName(price: number) {
+  return `${IT_NAME_PREFIX}${price}`;
+}
 
 // Price/name pattern: per decade → x5, x9, (x+1)0  →  5,9,10, 15,19,20, … 95,99,100.
 function buildItPrices(): number[] {
@@ -36,12 +43,12 @@ export async function ensureItProductsSeed() {
     updatedAt: timestamp,
   };
 
-  // Names are kept literally as the number ("5"/"9"/…) per the request (ชื่อ/ราคา 5/5),
+  // Names are kept literally with an "IT " prefix per the request (e.g. "IT 5"),
   // not normalized to "5 บาท".
   const products: Product[] = buildItPrices().map((price) => ({
     id: `prod_it_${price}`,
-    name: `${price}`,
-    displayName: `${price}`,
+    name: itProductName(price),
+    displayName: itProductName(price),
     price,
     categoryId: IT_CATEGORY_ID,
     color: IT_CATEGORY_COLOR,
@@ -76,6 +83,39 @@ export async function ensureItProductsSeed() {
     await SyncQueueRepository.enqueue({ tableName: 'categories', recordId: cat.id, action: 'upsert', payload: cat });
   }
   for (const product of created.products) {
+    await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });
+  }
+}
+
+/**
+ * One-time migration: prepend "IT " to every product in the สินค้า IT category that
+ * doesn't already have it. Covers devices that seeded the IT products before the
+ * prefix was requested. Matches by category so manually-added IT items are renamed too.
+ */
+export async function ensureItProductPrefix() {
+  if (await db.settings.get(IT_PREFIX_FLAG)) return;
+
+  const timestamp = nowIso();
+  const updated: Product[] = [];
+
+  await db.transaction('rw', [db.products, db.settings], async () => {
+    if (await db.settings.get(IT_PREFIX_FLAG)) return;
+    const itProducts = await db.products.where('categoryId').equals(IT_CATEGORY_ID).toArray();
+    for (const product of itProducts) {
+      const name = product.name.startsWith(IT_NAME_PREFIX) ? product.name : `${IT_NAME_PREFIX}${product.name}`;
+      const displayName = (product.displayName || '').startsWith(IT_NAME_PREFIX)
+        ? product.displayName
+        : `${IT_NAME_PREFIX}${product.displayName || product.name}`;
+      if (name !== product.name || displayName !== product.displayName) {
+        const next = { ...product, name, displayName, updatedAt: timestamp };
+        await db.products.put(next);
+        updated.push(next);
+      }
+    }
+    await db.settings.put({ key: IT_PREFIX_FLAG, value: 'true', updatedAt: timestamp });
+  });
+
+  for (const product of updated) {
     await SyncQueueRepository.enqueue({ tableName: 'products', recordId: product.id, action: 'upsert', payload: product });
   }
 }

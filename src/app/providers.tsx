@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { seedDatabase } from '../db/seed';
-import { ensureItProductsSeed } from '../db/seedItProducts';
+import { ensureItProductsSeed, ensureItProductPrefix } from '../db/seedItProducts';
 import { CatalogDefaultRepository } from '../db/repositories/CatalogDefaultRepository';
 import { ToastProvider, useToast } from '../components/common/Toast';
 import { syncMirrorModeToBody } from '../stores/mirrorStore';
@@ -43,6 +43,7 @@ export function AppProviders() {
     seedDatabase()
       .then(() => CatalogDefaultRepository.ensureProductNameBahtDefault())
       .then(() => ensureItProductsSeed())
+      .then(() => ensureItProductPrefix())
       .finally(() => setReady(true));
   }, []);
 

@@ -14,7 +14,7 @@ import { money } from '../utils/money';
 const DRAWER_ACTION_LABEL: Record<string, string> = {
   cash_in: 'นำเงินเข้า',
   cash_out: 'นำเงินออก',
-  open_only: 'เปิดอย่างเดียว',
+  open_only: 'แลกเงิน',
 };
 
 export function DashboardPage() {
@@ -180,8 +180,8 @@ export function DashboardPage() {
               <div className="text-lg font-black text-red-800">{money(drawer?.cashOut ?? 0)}</div>
             </div>
             <div className="rounded-md bg-slate-50 p-2">
-              <div className="text-xs font-bold text-slate-500">เปิดเฉยๆ</div>
-              <div className="text-lg font-black text-slate-950">{(drawer?.openOnlyCount ?? 0).toLocaleString('th-TH')}</div>
+              <div className="text-xs font-bold text-slate-500">แลกเงิน ({drawer?.openOnlyCount ?? 0})</div>
+              <div className="text-lg font-black text-slate-950">{money(drawer?.exchangeTotal ?? 0)}</div>
             </div>
           </div>
           <div className="max-h-72 overflow-y-auto">
@@ -199,11 +199,13 @@ export function DashboardPage() {
                   {entry.note?.trim() && <div className="mt-0.5 truncate text-sm text-slate-600">เหตุผล: {entry.note}</div>}
                   <div className="text-xs text-slate-400">{entry.userName}</div>
                 </div>
-                {entry.action !== 'open_only' && (
-                  <b className={entry.action === 'cash_in' ? 'text-emerald-700' : 'text-red-700'}>
-                    {entry.action === 'cash_in' ? '+' : '-'}{money(entry.amount)}
-                  </b>
-                )}
+                {entry.action === 'open_only'
+                  ? <b className="text-slate-600">{money(entry.amount)}</b>
+                  : (
+                    <b className={entry.action === 'cash_in' ? 'text-emerald-700' : 'text-red-700'}>
+                      {entry.action === 'cash_in' ? '+' : '-'}{money(entry.amount)}
+                    </b>
+                  )}
               </div>
             ))}
           </div>
