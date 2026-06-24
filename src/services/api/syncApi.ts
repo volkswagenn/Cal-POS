@@ -1,7 +1,7 @@
 import { db } from '../../db/database';
 import { SyncQueueRepository } from '../../db/syncQueue';
 import { nowIso } from '../../utils/date';
-import type { AppSetting, Category, ParkedBill, Product, SaleDetail, SyncQueueItem, User } from '../../types';
+import type { AppSetting, Category, Product, SaleDetail, SyncQueueItem, User } from '../../types';
 import { apiRequest, hasApiBaseUrl } from './client';
 
 const LAST_SYNC_KEY = 'calpos_last_sync_at';
@@ -15,7 +15,6 @@ type SyncPullResponse = {
     categories: Category[];
     products: Product[];
     sales: SaleDetail[];
-    parked_bills: ParkedBill[];
     deletes: Array<{ tableName: string; recordId: string; syncedAt: string }>;
   };
 };
@@ -104,8 +103,8 @@ function isNewer(incomingUpdatedAt: string | undefined, localUpdatedAt: string |
 }
 
 async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
-  const { users, settings, categories, products, sales, parked_bills, deletes } = response.changes;
-  if (!users.length && !settings.length && !categories.length && !products.length && !sales.length && !(parked_bills ?? []).length && !deletes.length) {
+  const { users, settings, categories, products, sales, deletes } = response.changes;
+  if (!users.length && !settings.length && !categories.length && !products.length && !sales.length && !deletes.length) {
     return false;
   }
 
@@ -114,7 +113,7 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
 
   await db.transaction(
     'rw',
-    [db.users, db.settings, db.categories, db.products, db.sales, db.sale_items, db.payments, db.discount_logs, db.parked_bills],
+    [db.users, db.settings, db.categories, db.products, db.sales, db.sale_items, db.payments, db.discount_logs],
     async () => {
       if (users.length) {
         const localUsers = (await db.users.bulkGet(users.map((u) => u.id))).filter(Boolean) as User[];
@@ -183,19 +182,6 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
         if (detail.payments.length) await db.payments.bulkPut(detail.payments);
         if (detail.discounts.length) await db.discount_logs.bulkPut(detail.discounts);
         mutated = true;
-      }
-
-      if ((parked_bills ?? []).length) {
-        const localBills = new Map(
-          (await db.parked_bills.bulkGet((parked_bills ?? []).map((b) => b.id)))
-            .filter(Boolean)
-            .map((b) => [b!.id, b!.updatedAt]),
-        );
-        const fresh = (parked_bills ?? []).filter((b) => isNewer(b.updatedAt, localBills.get(b.id)));
-        if (fresh.length) {
-          await db.parked_bills.bulkPut(fresh);
-          mutated = true;
-        }
       }
 
       for (const item of deletes) {
