@@ -404,12 +404,12 @@ export function PosPage() {
   };
 
   return (
-    <div className="h-[calc(100dvh-7.5rem)] p-2 md:p-3 lg:h-[calc(100dvh-4rem)] lg:p-4">
-      <div className="mb-2 grid grid-cols-2 rounded-md bg-white p-1 md:hidden">
+    <div className="flex h-[calc(100dvh-7.5rem)] flex-col p-2 md:p-3 lg:h-[calc(100dvh-4rem)] lg:p-4">
+      <div className="mb-2 shrink-0 grid grid-cols-2 rounded-md bg-white p-1 md:hidden">
         <button className={`rounded-md py-2 font-black ${mobileTab === 'products' ? 'bg-primary-600 text-white' : 'text-slate-500'}`} onClick={() => setMobileTab('products')}>สินค้า</button>
         <button className={`rounded-md py-2 font-black ${mobileTab === 'cart' ? 'bg-primary-600 text-white' : 'text-slate-500'}`} onClick={() => setMobileTab('cart')}>ตะกร้า ({cart.summary().itemCount})</button>
       </div>
-      <div className={`grid h-full gap-2 md:grid-cols-[minmax(0,1fr)_340px] lg:gap-3 lg:grid-cols-[minmax(0,1fr)_380px] ${categorySidebarCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_420px]' : 'xl:grid-cols-[220px_minmax(0,1fr)_420px]'}`}>
+      <div className={`min-h-0 flex-1 grid gap-2 md:grid-cols-[minmax(0,1fr)_340px] lg:gap-3 lg:grid-cols-[minmax(0,1fr)_380px] ${categorySidebarCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_420px]' : 'xl:grid-cols-[220px_minmax(0,1fr)_420px]'}`}>
         <aside className={`${categorySidebarCollapsed ? 'xl:hidden' : 'xl:block'} hidden overflow-auto rounded-lg border border-slate-200 bg-white p-3 shadow-sm`}>
           <button onClick={() => setCategoryId('all')} className={`mb-2 w-full rounded-md px-3 py-3 text-left font-bold ${categoryId === 'all' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700'}`}>ทั้งหมด</button>
           {(categories ?? []).map((category) => (
@@ -436,7 +436,7 @@ export function PosPage() {
             </div>
           </div>
           {categoryPanelOpen && (
-            <div className="mb-2 grid max-h-56 grid-cols-2 gap-2 overflow-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-3 md:max-h-64 lg:grid-cols-4 xl:hidden">
+            <div className="mb-2 grid max-h-36 grid-cols-2 gap-2 overflow-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-3 sm:max-h-48 md:max-h-64 lg:grid-cols-4 xl:hidden">
               <button onClick={() => { setCategoryId('all'); setCategoryPanelOpen(false); }} className={`rounded-md px-3 py-3 text-left text-sm font-black ${categoryId === 'all' ? 'bg-primary-600 text-white' : 'bg-slate-50 text-slate-700'}`}>ทั้งหมด</button>
               {(categories ?? []).map((category) => (
                 <button key={category.id} onClick={() => { setCategoryId(category.id); setCategoryPanelOpen(false); }} className={`flex items-center gap-2 rounded-md px-3 py-3 text-left text-sm font-black ${categoryId === category.id ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>

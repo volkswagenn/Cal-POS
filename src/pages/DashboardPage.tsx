@@ -74,7 +74,7 @@ export function DashboardPage() {
         subtitle="สรุปรายวัน รายชั่วโมง สินค้าขายดี ช่องทางชำระเงิน และยอดขายพนักงาน"
         action={<input type="date" className="rounded-md border-slate-300" value={date} onChange={(event) => setDate(event.target.value)} />}
       />
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {[
           ['ยอดขายสุทธิ', money(summary?.totalSales ?? 0)],
           ['จำนวนบิล', summary?.billCount ?? 0],

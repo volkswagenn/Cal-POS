@@ -188,17 +188,17 @@ export function AppLayout() {
           <button
             type="button"
             onClick={() => navigate('/front-pos')}
-            className="flex items-center gap-1 rounded-md px-3 py-2 text-xs font-black text-slate-600 hover:bg-primary-50 hover:text-primary-700"
+            className="flex items-center gap-1 rounded-md px-2 py-2 text-xs font-black text-slate-600 hover:bg-primary-50 hover:text-primary-700 sm:px-3"
           >
-            <Store size={17} /> หน้าขาย
+            <Store size={17} /> <span className="hidden sm:inline">หน้าขาย</span>
           </button>
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
             disabled={!can('dashboard')}
-            className="flex items-center gap-1 rounded-md bg-primary-600 px-3 py-2 text-xs font-black text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+            className="flex items-center gap-1 rounded-md bg-primary-600 px-2 py-2 text-xs font-black text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:px-3"
           >
-            <Warehouse size={17} /> หลังบ้าน
+            <Warehouse size={17} /> <span className="hidden sm:inline">หลังบ้าน</span>
           </button>
           <div className="hidden text-right md:block">
             <div className="font-bold">{user.displayName}</div>
