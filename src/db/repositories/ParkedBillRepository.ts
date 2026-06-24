@@ -2,6 +2,7 @@ import { db } from '../database';
 import type { CartItem, ParkedBill } from '../../types';
 import { nowIso } from '../../utils/date';
 import { uid } from '../../utils/id';
+import { SyncQueueRepository } from '../syncQueue';
 
 export type ParkedCartPayload = {
   items: CartItem[];
@@ -26,10 +27,14 @@ export const ParkedBillRepository = {
       updatedAt: timestamp,
     };
     await db.parked_bills.add(bill);
+    await SyncQueueRepository.enqueue({ tableName: 'parked_bills', recordId: bill.id, action: 'upsert', payload: bill });
     return bill;
   },
   async updateName(id: string, name: string) {
-    await db.parked_bills.update(id, { name, updatedAt: nowIso() });
+    const updatedAt = nowIso();
+    await db.parked_bills.update(id, { name, updatedAt });
+    const bill = await db.parked_bills.get(id);
+    if (bill) await SyncQueueRepository.enqueue({ tableName: 'parked_bills', recordId: id, action: 'upsert', payload: bill });
   },
   parseCart(bill: ParkedBill): ParkedCartPayload {
     const parsed = JSON.parse(bill.cartJson) as Partial<ParkedCartPayload>;
@@ -41,5 +46,6 @@ export const ParkedBillRepository = {
   },
   async deleteParkedBill(id: string) {
     await db.parked_bills.delete(id);
+    await SyncQueueRepository.enqueue({ tableName: 'parked_bills', recordId: id, action: 'delete', payload: null });
   },
 };

@@ -93,6 +93,15 @@ const activityLogPayloadSchema = z.object({
   createdAt: z.string().datetime(),
 });
 
+const parkedBillPayloadSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  cartJson: z.string(),
+  cashierId: z.string().min(1),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+
 const pushSchema = z.object({
   deviceId: z.string().min(1).default('unknown-device'),
   changes: z.array(z.object({
@@ -321,6 +330,22 @@ function toSettingSyncDto(setting: {
   };
 }
 
+async function pushParkedBill(shopId: string, change: z.infer<typeof pushSchema>['changes'][number]) {
+  if (change.action === 'delete') {
+    await prisma.parkedBill.deleteMany({ where: { id: change.recordId, shopId } });
+    return;
+  }
+  const payload = parkedBillPayloadSchema.parse(change.payload);
+  const existing = await prisma.parkedBill.findFirst({ where: { id: payload.id, shopId } });
+  const effectiveUpdatedAt = clampUpdatedAt(payload.updatedAt);
+  if (existing && existing.updatedAt > effectiveUpdatedAt) return;
+  await prisma.parkedBill.upsert({
+    where: { id: payload.id },
+    update: { name: payload.name, cartJson: payload.cartJson, cashierId: payload.cashierId, updatedAt: effectiveUpdatedAt },
+    create: { id: payload.id, shopId, name: payload.name, cartJson: payload.cartJson, cashierId: payload.cashierId, createdAt: new Date(payload.createdAt), updatedAt: effectiveUpdatedAt },
+  });
+}
+
 export async function syncRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
@@ -331,7 +356,7 @@ export async function syncRoutes(app: FastifyInstance) {
 
     // Process in dependency order: categories must exist before products (FK constraint)
     const TABLE_ORDER: Record<string, number> = {
-      users: 0, settings: 0, categories: 1, products: 2, sales: 3, activity_logs: 4,
+      users: 0, settings: 0, categories: 1, products: 2, sales: 3, activity_logs: 4, parked_bills: 5,
     };
     const ordered = [...input.changes].sort(
       (a, b) => (TABLE_ORDER[a.tableName] ?? 9) - (TABLE_ORDER[b.tableName] ?? 9),
@@ -355,6 +380,8 @@ export async function syncRoutes(app: FastifyInstance) {
           }
         } else if (change.tableName === 'activity_logs') {
           await pushActivityLog(request.user.shopId, change);
+        } else if (change.tableName === 'parked_bills') {
+          await pushParkedBill(request.user.shopId, change);
         } else {
           throw new Error(`Unsupported sync table: ${change.tableName}`);
         }
@@ -399,7 +426,7 @@ export async function syncRoutes(app: FastifyInstance) {
     }).parse(request.query);
     const since = query.since ? new Date(query.since) : new Date(0);
 
-    const [users, settings, categories, products, sales, syncLogs] = await Promise.all([
+    const [users, settings, categories, products, sales, parkedBills, syncLogs] = await Promise.all([
       prisma.user.findMany({
         where: { shopId: request.user.shopId, updatedAt: { gt: since } },
         orderBy: { updatedAt: 'asc' },
@@ -428,6 +455,10 @@ export async function syncRoutes(app: FastifyInstance) {
         include: { items: true, payments: true, discounts: true },
         orderBy: { updatedAt: 'asc' },
       }),
+      prisma.parkedBill.findMany({
+        where: { shopId: request.user.shopId, updatedAt: { gt: since } },
+        orderBy: { updatedAt: 'asc' },
+      }),
       prisma.syncLog.findMany({
         where: { shopId: request.user.shopId, syncedAt: { gt: since }, action: 'delete' },
         orderBy: { syncedAt: 'asc' },
@@ -443,6 +474,7 @@ export async function syncRoutes(app: FastifyInstance) {
       ...settings.map((s) => s.updatedAt.getTime()),
       ...products.map((p) => p.updatedAt.getTime()),
       ...sales.map((s) => s.updatedAt.getTime()),
+      ...parkedBills.map((b) => b.updatedAt.getTime()),
       ...syncLogs.map((l) => l.syncedAt.getTime()),
     ];
     const nextCursor = timestamps.length
@@ -457,6 +489,14 @@ export async function syncRoutes(app: FastifyInstance) {
         categories: categories.map(toCategoryDto),
         products: products.map(toProductDto),
         sales: sales.map(toSaleDetailDto),
+        parked_bills: parkedBills.map((b) => ({
+          id: b.id,
+          name: b.name,
+          cartJson: b.cartJson,
+          cashierId: b.cashierId,
+          createdAt: b.createdAt.toISOString(),
+          updatedAt: b.updatedAt.toISOString(),
+        })),
         deletes: syncLogs.map((log) => ({
           tableName: log.table,
           recordId: log.recordId,
