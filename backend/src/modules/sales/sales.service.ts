@@ -84,6 +84,11 @@ async function resolveBillNo(shopId: string, saleId: string, requestedBillNo: st
 export async function upsertSaleDetail(shopId: string, input: SaleDetailInput) {
   const billNo = await resolveBillNo(shopId, input.sale.id, input.sale.billNo);
 
+  // Always stamp with server receipt time (same logic as clampUpdatedAt in sync.routes).
+  // If we used the client's updatedAt, a device whose clock lags behind the server's last
+  // cursor would produce sales that are permanently invisible to other devices on pull.
+  const serverNow = new Date();
+
   await prisma.sale.upsert({
     where: { id: input.sale.id },
     update: {
@@ -97,7 +102,7 @@ export async function upsertSaleDetail(shopId: string, input: SaleDetailInput) {
       status: input.sale.status,
       voidReason: input.sale.voidReason,
       voidedByUserId: input.sale.voidedByUserId,
-      updatedAt: new Date(input.sale.updatedAt),
+      updatedAt: serverNow,
     },
     create: {
       id: input.sale.id,
@@ -113,7 +118,7 @@ export async function upsertSaleDetail(shopId: string, input: SaleDetailInput) {
       voidReason: input.sale.voidReason,
       voidedByUserId: input.sale.voidedByUserId,
       createdAt: new Date(input.sale.createdAt),
-      updatedAt: new Date(input.sale.updatedAt),
+      updatedAt: serverNow,
     },
   });
 
