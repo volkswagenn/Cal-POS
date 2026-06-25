@@ -104,6 +104,10 @@ export function useSync(): SyncState {
 
     const wsClient = new SyncWebSocket({
       onChanges: () => requestSync(),
+      // Another device broadcast a sales history clear — apply it locally right away.
+      // The pull-based path (salesClearCommand AppSetting) handles offline devices;
+      // this handles devices that are currently connected via WebSocket.
+      onClearSales: () => { void SettingsRepository.clearSalesHistory(); },
       // Fresh connect OR reconnect → pull anything missed while down and
       // revive stuck items, then stop the fallback poll.
       onConnected: () => {

@@ -407,7 +407,7 @@ export async function syncRoutes(app: FastifyInstance) {
       prisma.appSetting.findMany({
         where: {
           shopId: request.user.shopId,
-          key: { in: ['userPositions', 'discountApprovalRequired', 'loginSecurityConfig', 'loginSecurityState'] },
+          key: { in: ['userPositions', 'discountApprovalRequired', 'loginSecurityConfig', 'loginSecurityState', 'salesClearCommand'] },
           updatedAt: { gt: since },
         },
         orderBy: { updatedAt: 'asc' },

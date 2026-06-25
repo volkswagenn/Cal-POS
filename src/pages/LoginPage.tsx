@@ -10,6 +10,7 @@ import type { AuthTokens, User } from '../types';
 import { SettingsRepository } from '../db/repositories/SettingsRepository';
 import { nowIso } from '../utils/date';
 import { LOGIN_SECURITY_CONFIG_KEY, LOGIN_SECURITY_STATE_KEY, isUserLoginBlocked, parseLoginSecurityConfig, parseLoginSecurityState, type LoginSecurityState } from '../utils/loginSecurity';
+import { requestSync } from '../services/api/syncScheduler';
 
 const RESET_PIN_LENGTH = 6;
 const LOGIN_PIN_LENGTH = 6;
@@ -175,6 +176,8 @@ export function LoginPage() {
       toast('เซิร์ฟเวอร์ออฟไลน์ — ใช้งานแบบเครื่องเดียวชั่วคราว ข้อมูลจะไม่ sync', 'error');
     }
     setSession(user, tokens);
+    // Push any queued items (e.g. admin reset) immediately now that token is available.
+    if (tokens) requestSync({ immediate: true });
     toast(`ยินดีต้อนรับ ${user.displayName}`, 'success');
     navigate('/select');
   };
@@ -226,6 +229,7 @@ export function LoginPage() {
       await clearPinFailures();
       setPinLoginBlocked(false);
       setSession(user, tokens);
+      if (tokens) requestSync({ immediate: true });
       toast(`ยินดีต้อนรับ ${user.displayName}`, 'success');
       navigate('/select');
     }

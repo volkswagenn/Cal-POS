@@ -72,6 +72,11 @@ function createNumberProduct(price: number, category: Category, timestamp: strin
 
 export async function seedDatabase() {
   const timestamp = nowIso();
+  // Seed admin with epoch so the first sync pull always applies whatever PIN
+  // is on the cloud. Without this, nowIso() would be newer than the cloud
+  // record and isNewer() would skip the pull — leaving fresh installs with
+  // 000000 even when another device already changed the PIN.
+  const ADMIN_SEED_TS = '1970-01-01T00:00:00.000Z';
   const users: User[] = [
     {
       id: 'user_admin',
@@ -82,8 +87,8 @@ export async function seedDatabase() {
       pin: '000000',
       role: 'Admin',
       isActive: true,
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      createdAt: ADMIN_SEED_TS,
+      updatedAt: ADMIN_SEED_TS,
     },
   ];
 

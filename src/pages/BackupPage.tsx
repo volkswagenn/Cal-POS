@@ -47,10 +47,8 @@ export function BackupPage() {
   const logout = useAuthStore((state) => state.logout);
 
   const validateCurrentUserPin = async (pin: string) => {
-    const matched = await UserRepository.loginByPin(pin);
-    if (!matched || matched.id !== currentUser?.id) {
-      return 'PIN ไม่ถูกต้อง กรุณาใส่ PIN ของบัญชีที่กำลังเข้าสู่ระบบอยู่';
-    }
+    const valid = await UserRepository.verifyUserPin(currentUser?.id ?? '', pin);
+    if (!valid) return 'PIN ไม่ถูกต้อง กรุณาใส่ PIN ของบัญชีที่กำลังเข้าสู่ระบบอยู่';
     return '';
   };
 

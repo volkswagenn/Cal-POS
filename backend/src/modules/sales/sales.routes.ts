@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/permission.js';
 import { toSaleDetailDto, toSaleDto } from './sales.dto.js';
 import { upsertSaleDetail } from './sales.service.js';
+import { wsManager } from '../sync/ws.manager.js';
 
 const saleSchema = z.object({
   id: z.string().min(1),
@@ -167,6 +168,17 @@ export async function saleRoutes(app: FastifyInstance) {
 
       return { count };
     });
+
+    // Store clear timestamp in AppSettings so offline/future devices apply it on next pull.
+    const clearedAt = new Date();
+    await prisma.appSetting.upsert({
+      where: { shopId_key: { shopId: request.user.shopId, key: 'salesClearCommand' } },
+      update: { value: clearedAt.toISOString(), updatedAt: clearedAt },
+      create: { shopId: request.user.shopId, key: 'salesClearCommand', value: clearedAt.toISOString(), updatedAt: clearedAt },
+    });
+
+    // Broadcast to all currently connected devices so they clear immediately.
+    wsManager.push(request.user.shopId, JSON.stringify({ type: 'clear_sales' }));
 
     return { ok: true, deletedCount: count };
   });

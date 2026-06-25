@@ -31,4 +31,17 @@ export const wsManager = {
       }
     }
   },
+
+  // Broadcast an arbitrary message to every connected device in the shop room.
+  // Used for commands (e.g. clear_sales) that must reach ALL devices, not just
+  // "other" devices — the initiating device already handled the action locally.
+  push(shopId: string, message: string): void {
+    const room = rooms.get(shopId);
+    if (!room) return;
+    for (const conn of room) {
+      if (conn.ws.readyState === 1 /* OPEN */) {
+        conn.ws.send(message);
+      }
+    }
+  },
 };

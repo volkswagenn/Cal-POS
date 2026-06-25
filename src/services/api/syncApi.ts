@@ -1,5 +1,6 @@
 import { db } from '../../db/database';
 import { SyncQueueRepository } from '../../db/syncQueue';
+import { SettingsRepository } from '../../db/repositories/SettingsRepository';
 import { nowIso } from '../../utils/date';
 import type { AppSetting, Category, Product, SaleDetail, SyncQueueItem, User } from '../../types';
 import { apiRequest, hasApiBaseUrl } from './client';
@@ -110,6 +111,7 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
 
   let mutated = false;
   let catalogChanged = false;
+  let salesClearApplied = false;
 
   await db.transaction(
     'rw',
@@ -142,6 +144,9 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
           mutated = true;
           if (fresh.some((setting) => setting.key === 'userPositions')) {
             window.dispatchEvent(new Event('calpos:permissions-updated'));
+          }
+          if (fresh.some((setting) => setting.key === 'salesClearCommand')) {
+            salesClearApplied = true;
           }
         }
       }
@@ -204,6 +209,13 @@ async function applyPullChanges(response: SyncPullResponse): Promise<boolean> {
   // that show the product list can reload from IndexedDB immediately.
   if (catalogChanged) {
     window.dispatchEvent(new Event('calpos:catalog-updated'));
+  }
+
+  // A sales clear command was pulled from the cloud — apply it locally.
+  // Runs outside the transaction above because clearSalesHistory touches
+  // tables not included in that transaction (sync_queue, parked_bills, …).
+  if (salesClearApplied) {
+    await SettingsRepository.clearSalesHistory();
   }
 
   return mutated;

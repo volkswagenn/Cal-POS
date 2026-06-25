@@ -21,7 +21,19 @@ export const UserRepository = {
   },
   async loginByPin(pin: string) {
     const user = await db.users.where('pin').equals(pin.trim()).first();
-    return user?.isActive ? user : null;
+    if (!user?.isActive) return null;
+    // Admin PIN is always authoritative on the cloud — never authenticate admin
+    // locally so that a stale seed value (000000) can never bypass cloud auth.
+    if (user.username.toLowerCase() === 'admin') return null;
+    return user;
+  },
+  // Verify the PIN of a user who is ALREADY authenticated (e.g. confirm before a
+  // destructive action). Unlike loginByPin, this is safe for admin because the
+  // local record was already synced from cloud (epoch seed guarantees cloud wins).
+  async verifyUserPin(userId: string, pin: string): Promise<boolean> {
+    const user = await db.users.get(userId);
+    if (!user || !user.isActive) return false;
+    return user.pin.trim() === pin.trim();
   },
   async getUserByUsername(username: string) {
     return db.users.where('username').equals(username.trim()).first();
@@ -109,10 +121,16 @@ export const UserRepository = {
     const timestamp = nowIso();
     const passwordHash = await sha256('admin');
     const existing = await db.users.where('username').equals('admin').first();
+    let admin: User;
     if (existing) {
-      await db.users.update(existing.id, { passwordHash, passwordPlain: 'admin', pin: '000000', isActive: true, updatedAt: timestamp });
+      await db.users.update(existing.id, { passwordHash, passwordPlain: 'admin', pin: ADMIN_RESET_PIN, isActive: true, updatedAt: timestamp });
+      admin = { ...existing, passwordHash, passwordPlain: 'admin', pin: ADMIN_RESET_PIN, isActive: true, updatedAt: timestamp };
     } else {
-      await db.users.add({ id: uid('user'), username: 'admin', displayName: 'ผู้ดูแลระบบ', passwordHash, passwordPlain: 'admin', pin: '000000', role: 'Admin', isActive: true, createdAt: timestamp, updatedAt: timestamp });
+      admin = { id: uid('user'), username: 'admin', displayName: 'ผู้ดูแลระบบ', passwordHash, passwordPlain: 'admin', pin: ADMIN_RESET_PIN, role: 'Admin', isActive: true, createdAt: timestamp, updatedAt: timestamp };
+      await db.users.add(admin);
     }
+    // Push to cloud so the reset propagates — without this, cloud keeps the old PIN
+    // and API login continues to accept it even after local is reset.
+    await SyncQueueRepository.enqueue({ tableName: 'users', recordId: admin.id, action: 'upsert', payload: admin });
   },
 };

@@ -1,10 +1,12 @@
 import { useAuthStore } from '../../stores/authStore';
 import { API_BASE_URL, hasApiBaseUrl } from './client';
 
-type ServerMessage = { type: 'changes'; syncedAt: string } | { type: 'ping' };
+type ServerMessage = { type: 'changes'; syncedAt: string } | { type: 'ping' } | { type: 'clear_sales' };
 
 interface SyncWebSocketOptions {
   onChanges: () => void;
+  /** Called when another device cleared the sales history — clear local data immediately. */
+  onClearSales?: () => void;
   /** Called when the socket opens (after a fresh connect OR a reconnect). */
   onConnected?: () => void;
   /** Called when the socket drops (so a fallback poll can take over). */
@@ -20,11 +22,13 @@ export class SyncWebSocket {
   private destroyed = false;
   private wasConnected = false;
   private readonly onChanges: () => void;
+  private readonly onClearSales?: () => void;
   private readonly onConnected?: () => void;
   private readonly onDisconnected?: () => void;
 
   constructor(options: SyncWebSocketOptions) {
     this.onChanges = options.onChanges;
+    this.onClearSales = options.onClearSales;
     this.onConnected = options.onConnected;
     this.onDisconnected = options.onDisconnected;
   }
@@ -69,6 +73,7 @@ export class SyncWebSocket {
       try {
         const msg = JSON.parse(event.data as string) as ServerMessage;
         if (msg.type === 'changes') this.onChanges();
+        if (msg.type === 'clear_sales') this.onClearSales?.();
       } catch {
         // ignore malformed messages
       }
