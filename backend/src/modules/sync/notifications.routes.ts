@@ -55,6 +55,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       where: {
         shopId,
         syncedAt: { gt: since },
+        table: 'sales', // only sales events are relevant for cashiers
         ...(query.deviceId ? { deviceId: { not: query.deviceId } } : {}),
       },
       orderBy: { syncedAt: 'desc' },
