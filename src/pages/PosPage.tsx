@@ -26,6 +26,7 @@ import { PrinterOutputService } from '../services/printerOutputService';
 import { hasApiBaseUrl } from '../services/api/client';
 import { requestSync, subscribeSync } from '../services/api/syncScheduler';
 import { SyncQueueRepository } from '../db/syncQueue';
+import { usePermissions } from '../hooks/usePermissions';
 import { formatSalesSummaryText } from '../services/receiptTextFormatter';
 import {
   getReceiptContentSettings,
@@ -139,9 +140,12 @@ export function PosPage() {
   const [drawerAction, setDrawerAction] = useState<CashDrawerAction>('cash_in');
   const [drawerAmount, setDrawerAmount] = useState('');
   const [drawerNote, setDrawerNote] = useState('');
+  const [receiptOffline, setReceiptOffline] = useState(false);
   const cart = useCartStore();
   const user = useAuthStore((state) => state.user)!;
   const toast = useToast();
+  const { can } = usePermissions();
+  const canDeleteUnsyncedBill = can('delete_unsynced_bill');
 
   // รับข้อมูลสินค้า/หมวดหมู่ใหม่จาก device อื่นทันทีเมื่อ sync ดึงมา
   useEffect(() => {
@@ -543,8 +547,8 @@ export function PosPage() {
         </div>
       </div>
       {openPrice && <OpenPriceModal product={openPrice} onClose={() => setOpenPrice(null)} onConfirm={(price, note) => { cart.addProduct(openPrice, { price, note }); setOpenPrice(null); }} />}
-      {payment && <PaymentModal user={user} onClose={() => setPayment(false)} onSuccess={(detail) => { setPayment(false); setReceipt(detail); reloadHistory(); }} />}
-      {receipt && <ReceiptModal detail={receipt} onClose={() => setReceipt(null)} />}
+      {payment && <PaymentModal user={user} onClose={() => setPayment(false)} onSuccess={(detail) => { setPayment(false); setReceipt(detail); setReceiptOffline(!navigator.onLine); reloadHistory(); void reloadUnsyncedBills(); }} />}
+      {receipt && <ReceiptModal detail={receipt} isOfflineSale={receiptOffline} onClose={() => { setReceipt(null); setReceiptOffline(false); }} />}
       {drawerOpen && (
         <Modal title="เปิดลิ้นชักเก็บเงิน" onClose={() => setDrawerOpen(false)}>
           <div className="space-y-4">
@@ -890,7 +894,7 @@ export function PosPage() {
                       <th>ชำระเงิน</th>
                       <th>ยอดรวม</th>
                       <th>สถานะ</th>
-                      <th className="p-3 text-right">ดู</th>
+                      <th className="p-3 text-right">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -905,7 +909,7 @@ export function PosPage() {
                         <td>
                           {isUnsyncedTab ? (
                             <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">
-                              <CloudOff size={11} /> sync ไม่สำเร็จ
+                              <CloudOff size={11} /> ยังไม่ sync
                             </span>
                           ) : (
                             <span className={`rounded-full px-2 py-1 text-xs font-bold ${detail.sale.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -914,7 +918,36 @@ export function PosPage() {
                           )}
                         </td>
                         <td className="p-3 text-right">
-                          <button className="rounded-md bg-slate-100 px-3 py-2 font-bold text-slate-700" onClick={() => setHistorySelected(detail)}>รายละเอียด</button>
+                          <div className="flex justify-end gap-1.5">
+                            {isUnsyncedTab && (
+                              <button
+                                className="flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-black text-white hover:bg-amber-700"
+                                title="sync บิลนี้ใหม่"
+                                onClick={() => {
+                                  void SyncQueueRepository.resetForSale(detail.sale.id).then(() => requestSync({ immediate: true }));
+                                  void reloadUnsyncedBills();
+                                }}
+                              >
+                                <RefreshCw size={12} /> sync
+                              </button>
+                            )}
+                            {isUnsyncedTab && canDeleteUnsyncedBill && (
+                              <button
+                                className="flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-black text-red-600 hover:bg-red-100"
+                                title="ลบบิลนี้ออกจากเครื่อง"
+                                onClick={async () => {
+                                  if (!window.confirm(`ลบบิล ${detail.sale.billNo} ออกจากเครื่องนี้? บิลที่ยังไม่ถูก sync จะหายถาวร`)) return;
+                                  await SaleRepository.deleteSaleById(detail.sale.id);
+                                  toast(`ลบบิล ${detail.sale.billNo} แล้ว`, 'success');
+                                  void reloadUnsyncedBills();
+                                  void reloadHistory();
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                            <button className="rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200" onClick={() => setHistorySelected(detail)}>ดู</button>
+                          </div>
                         </td>
                       </tr>
                     ))}

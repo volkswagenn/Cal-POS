@@ -185,4 +185,14 @@ export const SaleRepository = {
     const detail = await this.getSaleById(id);
     if (detail) await SyncQueueRepository.enqueue({ tableName: 'sales', recordId: id, action: 'upsert', payload: detail });
   },
+  // Hard-delete a sale that never made it to the cloud (unsynced bills only).
+  async deleteSaleById(id: string) {
+    await db.transaction('rw', db.sales, db.sale_items, db.payments, db.discount_logs, async () => {
+      await db.sales.delete(id);
+      await db.sale_items.where('saleId').equals(id).delete();
+      await db.payments.where('saleId').equals(id).delete();
+      await db.discount_logs.where('saleId').equals(id).delete();
+    });
+    await SyncQueueRepository.deleteForSale(id);
+  },
 };

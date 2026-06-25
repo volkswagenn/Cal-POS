@@ -105,14 +105,43 @@ export const SyncQueueRepository = {
   },
 
   // Return sale IDs whose sync_queue entry is stuck (failed or dead).
+  // When offline, also include pending entries (can't be processed until back online).
   // Used to surface "ไม่ถูก sync" bills in the POS history tab.
   async getUnsyncedSaleIds(): Promise<string[]> {
+    const statuses: Array<SyncQueueItem['status']> = ['failed', 'dead'];
+    if (!navigator.onLine) statuses.push('pending');
     const items = await db.sync_queue
       .where('status')
-      .anyOf(['failed', 'dead'])
+      .anyOf(statuses)
       .toArray();
     return items
       .filter((item) => item.tableName === 'sales')
       .map((item) => item.recordId);
+  },
+
+  // Reset sync queue entries for a single sale back to pending (manual per-bill retry).
+  async resetForSale(saleId: string) {
+    const items = await db.sync_queue
+      .where('status').anyOf(['failed', 'dead', 'pending'])
+      .filter((item) => item.tableName === 'sales' && item.recordId === saleId)
+      .toArray();
+    await Promise.all(
+      items.map((item) =>
+        db.sync_queue.update(item.id, {
+          status: 'pending',
+          attempts: 0,
+          lastError: undefined,
+          updatedAt: nowIso(),
+        }),
+      ),
+    );
+    return items.length;
+  },
+
+  // Remove all sync queue entries for a sale (used when deleting an unsynced bill).
+  async deleteForSale(saleId: string) {
+    await db.sync_queue
+      .filter((item) => item.tableName === 'sales' && item.recordId === saleId)
+      .delete();
   },
 };

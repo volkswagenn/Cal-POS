@@ -12,6 +12,7 @@ export type PermissionKey =
   | 'reset_data'
   | 'void_bill'
   | 'refund_bill'
+  | 'delete_unsynced_bill'
   | 'edit_sale_price'
   | 'apply_discount'
   | 'unlock_mirror';
@@ -46,6 +47,7 @@ export const PERMISSION_TREE: PermissionNode[] = [
     children: [
       { key: 'void_bill', label: 'Void bill' },
       { key: 'refund_bill', label: 'Refund bill' },
+      { key: 'delete_unsynced_bill', label: 'ลบบิลที่ยังไม่ถูก sync' },
     ],
   },
   { key: 'send_report', label: 'ส่งรายงาน' },
@@ -83,7 +85,7 @@ export const defaultPositions: PositionConfig[] = [
   { name: 'Admin', permissions: allPermissionKeys },
   {
     name: 'Manager',
-    permissions: ['dashboard', 'pos', 'edit_sale_price', 'apply_discount', 'bill_history', 'void_bill', 'products'],
+    permissions: ['dashboard', 'pos', 'edit_sale_price', 'apply_discount', 'bill_history', 'void_bill', 'refund_bill', 'delete_unsynced_bill', 'products'],
   },
   { name: 'Cashier', permissions: ['pos', 'bill_history'] },
 ];
