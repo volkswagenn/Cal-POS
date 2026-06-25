@@ -179,8 +179,18 @@ export function PosPage() {
     },
     [],
   );
-  const unsyncedCount = unsyncedBills?.length ?? 0;
+  // failedIds = actually failed/dead syncs → used for BADGE (not pending)
+  const { data: failedIds, reload: reloadFailedIds } = useAsync(
+    async () => {
+      if (!hasApiBaseUrl) return [] as string[];
+      return SyncQueueRepository.getFailedSaleIds();
+    },
+    [],
+  );
+  const failedCount = failedIds?.length ?? 0;
   const unsyncedSet = useMemo(() => new Set((unsyncedBills ?? []).map((d) => d.sale.id)), [unsyncedBills]);
+  // Track which bills are in the failed/dead set (vs pending-offline) for tab status labels
+  const failedSet = useMemo(() => new Set(failedIds ?? []), [failedIds]);
 
   // เมื่อ sync สำเร็จ → รีโหลดบิลที่ยังไม่ถูก sync ให้อัตโนมัติ
   // (บิลที่ sync สำเร็จจะหายออกจาก queue → หายจาก tab "ไม่ถูก sync")
@@ -191,10 +201,11 @@ export function PosPage() {
       if (s.lastSyncedAt && s.lastSyncedAt !== lastSyncSig.current) {
         lastSyncSig.current = s.lastSyncedAt;
         void reloadUnsyncedBills();
+        void reloadFailedIds();
         void reloadHistory();
       }
     });
-  }, [reloadUnsyncedBills, reloadHistory]);
+  }, [reloadUnsyncedBills, reloadFailedIds, reloadHistory]);
 
   const filteredProducts = useMemo(() => (products ?? []).filter((product) => {
     const matchCategory = categoryId === 'all' || product.categoryId === categoryId;
@@ -508,13 +519,14 @@ export function PosPage() {
                   setHistoryOpen(true);
                   reloadHistory();
                   void reloadUnsyncedBills();
+                  void reloadFailedIds();
                 }}
                 className="relative flex items-center justify-center gap-2 rounded-md border border-primary-200 bg-primary-50 px-4 py-3 font-black text-primary-700 hover:bg-primary-100"
               >
                 <History size={20} /> ประวัติบิล
-                {unsyncedCount > 0 && (
+                {failedCount > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white shadow">
-                    {unsyncedCount}
+                    {failedCount}
                   </span>
                 )}
               </button>
@@ -547,7 +559,7 @@ export function PosPage() {
         </div>
       </div>
       {openPrice && <OpenPriceModal product={openPrice} onClose={() => setOpenPrice(null)} onConfirm={(price, note) => { cart.addProduct(openPrice, { price, note }); setOpenPrice(null); }} />}
-      {payment && <PaymentModal user={user} onClose={() => setPayment(false)} onSuccess={(detail) => { setPayment(false); setReceipt(detail); setReceiptOffline(!navigator.onLine); reloadHistory(); void reloadUnsyncedBills(); }} />}
+      {payment && <PaymentModal user={user} onClose={() => setPayment(false)} onSuccess={(detail) => { setPayment(false); setReceipt(detail); setReceiptOffline(!navigator.onLine); reloadHistory(); void reloadUnsyncedBills(); void reloadFailedIds(); }} />}
       {receipt && <ReceiptModal detail={receipt} isOfflineSale={receiptOffline} onClose={() => { setReceipt(null); setReceiptOffline(false); }} />}
       {drawerOpen && (
         <Modal title="เปิดลิ้นชักเก็บเงิน" onClose={() => setDrawerOpen(false)}>
@@ -807,7 +819,7 @@ export function PosPage() {
         };
         const allTabs: Array<{ value: HistoryStatusFilter; label: string; badge?: number }> = [
           ...BILL_STATUS_TABS,
-          ...(hasApiBaseUrl ? [{ value: '__unsynced__' as const, label: 'ไม่ถูก sync', badge: unsyncedCount }] : []),
+          ...(hasApiBaseUrl ? [{ value: '__unsynced__' as const, label: 'ไม่ถูก sync', badge: failedCount }] : []),
         ];
         return (
           <Modal title="ประวัติบิลในหน้าขาย" onClose={() => setHistoryOpen(false)} wide>
@@ -845,28 +857,45 @@ export function PosPage() {
               </div>
 
               {/* Unsynced tab: banner + retry button */}
-              {isUnsyncedTab && (
-                <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-                  <div className="flex items-center gap-2 text-sm font-bold text-amber-800">
-                    <CloudOff size={16} />
-                    {unsyncedCount > 0
-                      ? `มี ${unsyncedCount} บิลที่ยังไม่ถูก sync ขึ้น cloud — ระบบจะลอง upload ใหม่เมื่อออนไลน์`
-                      : 'บิลทุกรายการถูก sync ขึ้น cloud แล้ว ✓'}
+              {isUnsyncedTab && (() => {
+                const pendingCount = (unsyncedBills ?? []).length - failedCount;
+                const waitingOnline = pendingCount > 0 && !navigator.onLine;
+                return (
+                  <div className="space-y-2">
+                    {(unsyncedBills ?? []).length === 0 ? (
+                      <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                        ✓ บิลทุกรายการถูก sync ขึ้น cloud แล้ว
+                      </div>
+                    ) : (
+                      <>
+                        {waitingOnline && (
+                          <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-800">
+                            <CloudOff size={15} /> {pendingCount} บิลรอ sync — จะอัปโหลดอัตโนมัติเมื่อออนไลน์
+                          </div>
+                        )}
+                        {failedCount > 0 && (
+                          <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5">
+                            <div className="flex items-center gap-2 text-sm font-bold text-amber-800">
+                              <CloudOff size={15} /> {failedCount} บิล sync ไม่สำเร็จ — กรุณา sync ใหม่
+                            </div>
+                            <button
+                              type="button"
+                              className="flex shrink-0 items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
+                              onClick={() => {
+                                void SyncQueueRepository.resetFailed().then(() => requestSync({ immediate: true }));
+                                void reloadUnsyncedBills();
+                                void reloadFailedIds();
+                              }}
+                            >
+                              <RefreshCw size={13} /> sync ทั้งหมด
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                  {unsyncedCount > 0 && (
-                    <button
-                      type="button"
-                      className="flex shrink-0 items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
-                      onClick={() => {
-                        void SyncQueueRepository.resetFailed().then(() => requestSync({ immediate: true }));
-                        void reloadUnsyncedBills();
-                      }}
-                    >
-                      <RefreshCw size={13} /> ลอง sync ใหม่
-                    </button>
-                  )}
-                </div>
-              )}
+                );
+              })()}
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-md bg-slate-50 p-3">
@@ -908,9 +937,15 @@ export function PosPage() {
                         <td className="font-black text-emerald-700">{money(detail.sale.total)}</td>
                         <td>
                           {isUnsyncedTab ? (
-                            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">
-                              <CloudOff size={11} /> ยังไม่ sync
-                            </span>
+                            failedSet.has(detail.sale.id) ? (
+                              <span className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">
+                                <CloudOff size={11} /> sync ไม่สำเร็จ
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700">
+                                <CloudOff size={11} /> รอ sync
+                              </span>
+                            )
                           ) : (
                             <span className={`rounded-full px-2 py-1 text-xs font-bold ${detail.sale.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                               {statusLabel(detail.sale.status)}
@@ -926,6 +961,7 @@ export function PosPage() {
                                 onClick={() => {
                                   void SyncQueueRepository.resetForSale(detail.sale.id).then(() => requestSync({ immediate: true }));
                                   void reloadUnsyncedBills();
+                                  void reloadFailedIds();
                                 }}
                               >
                                 <RefreshCw size={12} /> sync

@@ -104,9 +104,20 @@ export const SyncQueueRepository = {
     return db.sync_queue.where('status').equals('synced').delete();
   },
 
-  // Return sale IDs whose sync_queue entry is stuck (failed or dead).
-  // When offline, also include pending entries (can't be processed until back online).
-  // Used to surface "ไม่ถูก sync" bills in the POS history tab.
+  // Sale IDs that actually failed to sync (failed / dead).
+  // Used for the notification BADGE — shows only truly broken syncs.
+  async getFailedSaleIds(): Promise<string[]> {
+    const items = await db.sync_queue
+      .where('status')
+      .anyOf(['failed', 'dead'])
+      .toArray();
+    return items
+      .filter((item) => item.tableName === 'sales')
+      .map((item) => item.recordId);
+  },
+
+  // Sale IDs that are not yet in the cloud — for the "ไม่ถูก sync" TAB display.
+  // Includes pending entries when offline (they can't be processed until back online).
   async getUnsyncedSaleIds(): Promise<string[]> {
     const statuses: Array<SyncQueueItem['status']> = ['failed', 'dead'];
     if (!navigator.onLine) statuses.push('pending');

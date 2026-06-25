@@ -144,14 +144,12 @@ export function useSync(): SyncState {
       if (navigator.onLine) void retryDeadLetters();
     }, 5 * 60_000);
 
-    // Background poll every 60 s regardless of WebSocket state.
-    // Needed because Render free-tier WS connections can enter a "zombie"
-    // state (readyState = OPEN, but messages are never delivered). Without
-    // this poll a device would sit stale indefinitely while the WS appears
-    // healthy and the fallback-poll guard (!isConnected()) never fires.
+    // Background poll every 5 min as zombie-WS safety net.
+    // Render free-tier WS can enter "zombie" state (readyState = OPEN, messages
+    // never delivered). 5 min keeps data reasonably fresh without spamming the API.
     const bgPollId = window.setInterval(() => {
       if (navigator.onLine) requestSync();
-    }, 60_000);
+    }, 5 * 60_000);
 
     // Tab becomes visible → always sync, regardless of WS state.
     // If the WS is healthy the scheduler deduplicates; if it's zombie

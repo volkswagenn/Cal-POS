@@ -126,15 +126,19 @@ export function ReceiptModal({ detail, onClose, isOfflineSale }: { detail: SaleD
       panelClassName="flex max-h-[92vh] flex-col overflow-hidden"
       bodyClassName="flex min-h-0 flex-1 flex-col p-0"
     >
-      {isOfflineSale && (
-        <div className="border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-center text-sm font-bold text-amber-800 no-print">
-          ⚠️ บันทึกสำเร็จในเครื่อง — ยังไม่ถูก sync (ไม่มีสัญญาณอินเทอร์เน็ต จะ sync อัตโนมัติเมื่อออนไลน์)
+      {isOfflineSale ? (
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-4 text-center no-print">
+          <div className="text-base font-black text-amber-700">✓ สำเร็จ — ไม่ได้ Sync ข้อมูล</div>
+          <div className="mt-0.5 text-sm font-bold text-amber-600">เงินทอน</div>
+          <div className="text-5xl font-black leading-tight text-amber-900">{money(change)}</div>
+          <div className="mt-1.5 text-xs font-bold text-amber-500">บันทึกในเครื่องแล้ว — จะ sync อัตโนมัติเมื่อออนไลน์</div>
+        </div>
+      ) : (
+        <div className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-center no-print">
+          <div className="text-sm font-black text-emerald-700">เงินทอน</div>
+          <div className="text-5xl font-black leading-tight text-emerald-800">{money(change)}</div>
         </div>
       )}
-      <div className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-center no-print">
-        <div className="text-sm font-black text-emerald-700">เงินทอน</div>
-        <div className="text-5xl font-black leading-tight text-emerald-800">{money(change)}</div>
-      </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
         <div className="print-receipt mx-auto bg-white print:max-w-none" style={renderConfig ? { width: `${Math.ceil(renderConfig.paperWidthDots * 0.5)}px` } : undefined}>
           {renderConfig && (
