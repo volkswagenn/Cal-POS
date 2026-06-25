@@ -82,8 +82,19 @@ export function DashboardPage() {
     }
   }), [reloadLocal, reloadCloud, reloadCategorySales, reloadDrawer]);
 
-  // Prefer cloud data (all devices); while cloud loads, show local (this device).
-  const daily = cloudData ?? localData;
+  // Merge strategy: use whichever source has MORE bills — that is the more
+  // complete picture. Two cases:
+  //   • local > cloud  → this device has unsynced sales not yet on cloud; keep local
+  //   • cloud >= local → cloud has all local bills + possibly other devices'; use cloud
+  // This prevents the jarring "฿10 → ฿5" drop that happens when cloud loads and
+  // doesn't yet have bills that are still pending sync from this device.
+  const daily = (() => {
+    if (!cloudData) return localData;
+    if (!localData) return cloudData;
+    return cloudData.summary.billCount >= localData.summary.billCount
+      ? cloudData
+      : localData;
+  })();
   // True only when cloud was explicitly tried and failed (not just "still loading").
   const usingLocalFallback = cloudFailed && cloudData === null;
 
