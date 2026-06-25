@@ -28,6 +28,12 @@ async function loadLocalReport(date: string) {
   return { summary, hourly, products, payments, employees };
 }
 
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function DashboardPage() {
   const [date, setDate] = useState(formatDateInput());
   const [usingLocalFallback, setUsingLocalFallback] = useState(false);
@@ -86,7 +92,13 @@ export function DashboardPage() {
       <PageHeader
         title="แดชบอร์ด"
         subtitle="สรุปรายวัน รายชั่วโมง สินค้าขายดี ช่องทางชำระเงิน และยอดขายพนักงาน"
-        action={<input type="date" className="rounded-md border-slate-300" value={date} onChange={(event) => setDate(event.target.value)} />}
+        action={
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setDate((d) => shiftDate(d, -1))} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm hover:bg-slate-100">◀</button>
+            <input type="date" className="rounded-md border-slate-300" value={date} onChange={(event) => setDate(event.target.value)} />
+            <button type="button" onClick={() => setDate((d) => shiftDate(d, 1))} disabled={date >= formatDateInput()} className="rounded-md border border-slate-300 px-2 py-1.5 text-sm hover:bg-slate-100 disabled:opacity-40">▶</button>
+          </div>
+        }
       />
       {usingLocalFallback && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm">
