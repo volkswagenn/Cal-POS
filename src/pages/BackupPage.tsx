@@ -468,10 +468,10 @@ export function BackupPage() {
 
             {/* ── ล้างประวัติการขาย ── */}
             <div className="rounded-lg border border-orange-200 bg-orange-50 p-4">
-              <h3 className="mb-1 text-sm font-black text-orange-900">ล้างประวัติการขายทั้งหมด</h3>
+              <h3 className="mb-1 text-sm font-black text-orange-900">ล้างประวัติการขายและข้อมูลที่รอ sync ทั้งหมด</h3>
               <p className="mb-3 text-xs font-medium text-orange-700">
-                ลบเฉพาะรายการขาย รายการสินค้า การชำระเงิน และส่วนลดทั้งหมด
-                <br />สินค้า หมวดหมู่ ผู้ใช้ และการตั้งค่า<span className="font-black">จะไม่ถูกลบ</span>
+                ลบ: รายการขาย บิลพัก บันทึกลิ้นชัก คิว sync และประวัติทั้งหมด
+                <br />คงไว้: สินค้า หมวดหมู่ ผู้ใช้ และการตั้งค่า
                 <br />ต้องยืนยันด้วย PIN ของบัญชีที่กำลังเข้าสู่ระบบอยู่
               </p>
               <button

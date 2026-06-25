@@ -93,11 +93,22 @@ export const SettingsRepository = {
   },
 
   async clearSalesHistory() {
-    await db.transaction('rw', [db.sales, db.sale_items, db.payments, db.discount_logs], async () => {
+    await db.transaction('rw', [
+      db.sales, db.sale_items, db.payments, db.discount_logs,
+      db.sync_queue, db.parked_bills, db.activity_logs, db.cash_drawer_logs,
+      db.external_report_exports, db.external_report_imports, db.external_report_rows,
+    ], async () => {
       await db.discount_logs.clear();
       await db.payments.clear();
       await db.sale_items.clear();
       await db.sales.clear();
+      await db.sync_queue.clear();
+      await db.parked_bills.clear();
+      await db.activity_logs.clear();
+      await db.cash_drawer_logs.clear();
+      await db.external_report_exports.clear();
+      await db.external_report_imports.clear();
+      await db.external_report_rows.clear();
     });
   },
 };

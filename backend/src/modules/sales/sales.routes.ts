@@ -149,6 +149,10 @@ export async function saleRoutes(app: FastifyInstance) {
       await tx.saleItem.deleteMany({ where: { saleId: { in: saleIds } } });
       const { count } = await tx.sale.deleteMany({ where: { shopId: request.user.shopId } });
 
+      // Also clear sync/notification log and parked bills so history is truly clean
+      await tx.syncLog.deleteMany({ where: { shopId: request.user.shopId } });
+      await tx.parkedBill.deleteMany({ where: { shopId: request.user.shopId } });
+
       await tx.activityLog.create({
         data: {
           id: crypto.randomUUID(),
