@@ -34,6 +34,14 @@ export const notificationsApi = {
     }
   },
 
+  /** Delete all notification history from the server (syncLog). */
+  async clearActivity(): Promise<void> {
+    if (!hasApiBaseUrl || !navigator.onLine) return;
+    try {
+      await apiRequest('/api/notifications/activity', { method: 'DELETE' });
+    } catch { /* non-critical */ }
+  },
+
   /** Cross-device activity (this device's own actions excluded server-side). */
   async fetchActivity(since?: string): Promise<ActivityItem[]> {
     if (!hasApiBaseUrl || !navigator.onLine) return [];

@@ -26,6 +26,12 @@ const activityQuerySchema = z.object({
 export async function notificationRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
+  // Clear all sync-log notification history for this shop.
+  app.delete('/activity', async (request) => {
+    await prisma.syncLog.deleteMany({ where: { shopId: request.user.shopId } });
+    return { ok: true };
+  });
+
   // Register / refresh this device's human-readable code ("POS1").
   app.post('/device', async (request) => {
     const { deviceId, code } = registerSchema.parse(request.body);

@@ -152,6 +152,7 @@ export function NotificationBell({ tone = 'light' }: { tone?: 'light' | 'dark' }
                     localStorage.setItem(LAST_READ_KEY, now);
                     setItems([]);
                     setLastReadAt(now);
+                    void notificationsApi.clearActivity();
                   }}
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100"
                 >
