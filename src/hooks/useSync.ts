@@ -144,12 +144,13 @@ export function useSync(): SyncState {
       if (navigator.onLine) void retryDeadLetters();
     }, 5 * 60_000);
 
-    // Background poll every 5 min as zombie-WS safety net.
+    // Background poll every 60 s as zombie-WS safety net.
     // Render free-tier WS can enter "zombie" state (readyState = OPEN, messages
-    // never delivered). 5 min keeps data reasonably fresh without spamming the API.
+    // never delivered). 60 s ensures other devices see new sales within 1 minute
+    // even when the WS appears "connected" but is silently dead.
     const bgPollId = window.setInterval(() => {
       if (navigator.onLine) requestSync();
-    }, 5 * 60_000);
+    }, 60_000);
 
     // Tab becomes visible → always sync, regardless of WS state.
     // If the WS is healthy the scheduler deduplicates; if it's zombie

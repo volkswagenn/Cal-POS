@@ -46,6 +46,7 @@ export function DashboardPage() {
       } catch {
         // API unavailable (backend starting up / offline) → show local data
         setUsingLocalFallback(true);
+        return loadLocalReport(date);
       }
     }
     setUsingLocalFallback(false);
@@ -58,14 +59,23 @@ export function DashboardPage() {
   const { data: categorySales, reload: reloadCategorySales } = useAsync(() => ReportRepository.getCategorySales(date), [date]);
   const { data: drawer, reload: reloadDrawer } = useAsync(() => ReportRepository.getDrawerSummary(date), [date]);
 
-  // Reload the dashboard whenever a sync completes (WebSocket push, the
-  // "อัปเดตข้อมูลร้าน" button, etc.) so new sales appear without a manual
-  // browser refresh. Read-only subscription to the scheduler — does not
-  // change any sync behaviour.
+  // Reload the dashboard whenever a sync completes so new sales appear without
+  // a manual refresh. Two triggers:
+  //   1. lastSyncedAt changes → new data pulled from cloud (normal case)
+  //   2. isSyncing flips true→false with no error → sync just finished;
+  //      catches the cold-start recovery case where nothing new was pulled
+  //      but the API is now reachable and we should switch from local fallback
+  //      back to the cloud report.
   const lastSyncSig = useRef<string | null>(null);
+  const wasSyncing = useRef(false);
   useEffect(() => subscribeSync((s) => {
-    if (s.lastSyncedAt && s.lastSyncedAt !== lastSyncSig.current) {
-      lastSyncSig.current = s.lastSyncedAt;
+    const sigChanged = s.lastSyncedAt != null && s.lastSyncedAt !== lastSyncSig.current;
+    if (sigChanged) lastSyncSig.current = s.lastSyncedAt;
+
+    const justFinished = wasSyncing.current && !s.isSyncing && !s.lastSyncError;
+    wasSyncing.current = s.isSyncing;
+
+    if (sigChanged || justFinished) {
       void reload();
       void reloadCategorySales();
       void reloadDrawer();
