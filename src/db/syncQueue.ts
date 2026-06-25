@@ -103,4 +103,16 @@ export const SyncQueueRepository = {
   async pruneSynced() {
     return db.sync_queue.where('status').equals('synced').delete();
   },
+
+  // Return sale IDs whose sync_queue entry is stuck (failed or dead).
+  // Used to surface "ไม่ถูก sync" bills in the POS history tab.
+  async getUnsyncedSaleIds(): Promise<string[]> {
+    const items = await db.sync_queue
+      .where('status')
+      .anyOf(['failed', 'dead'])
+      .toArray();
+    return items
+      .filter((item) => item.tableName === 'sales')
+      .map((item) => item.recordId);
+  },
 };

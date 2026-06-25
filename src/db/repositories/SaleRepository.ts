@@ -154,6 +154,14 @@ export const SaleRepository = {
     ]);
     return { sale, items, payments, discounts };
   },
+  async getSalesByIds(ids: string[]): Promise<SaleDetail[]> {
+    if (!ids.length) return [];
+    const records = await db.sales.bulkGet(ids);
+    const sales = records.filter((s): s is Sale => s !== undefined);
+    // Sort newest-first (same order as searchSales)
+    sales.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return Promise.all(sales.map((sale) => this.getSaleDetail(sale)));
+  },
   async searchSales(filters: { query?: string; date?: string; cashierId?: string; method?: string; status?: string }) {
     let sales = await db.sales.orderBy('createdAt').reverse().toArray();
     if (filters.query) sales = sales.filter((sale) => sale.billNo.toLowerCase().includes(filters.query!.toLowerCase()));

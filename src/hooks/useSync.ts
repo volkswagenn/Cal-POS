@@ -144,10 +144,20 @@ export function useSync(): SyncState {
       if (navigator.onLine) void retryDeadLetters();
     }, 5 * 60_000);
 
-    // Tab becomes visible again → only sync if WS is down (otherwise the
-    // socket already kept us current; no need to spend an API call).
+    // Background poll every 60 s regardless of WebSocket state.
+    // Needed because Render free-tier WS connections can enter a "zombie"
+    // state (readyState = OPEN, but messages are never delivered). Without
+    // this poll a device would sit stale indefinitely while the WS appears
+    // healthy and the fallback-poll guard (!isConnected()) never fires.
+    const bgPollId = window.setInterval(() => {
+      if (navigator.onLine) requestSync();
+    }, 60_000);
+
+    // Tab becomes visible → always sync, regardless of WS state.
+    // If the WS is healthy the scheduler deduplicates; if it's zombie
+    // this is the only trigger that unsticks the dashboard.
     const handleVisibilityChange = () => {
-      if (!document.hidden && navigator.onLine && !wsClient.isConnected()) {
+      if (!document.hidden && navigator.onLine) {
         requestSync({ immediate: true });
       }
     };
@@ -159,6 +169,7 @@ export function useSync(): SyncState {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopFallbackPoll();
       window.clearInterval(deadLetterId);
+      window.clearInterval(bgPollId);
       wsClient.destroy();
       cancelScheduledSync();
     };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Product, SaleDetail, SaleStatus } from '../types';
 import type { CashDrawerAction } from '../types';
 import { CategoryRepository } from '../db/repositories/CategoryRepository';
@@ -20,9 +20,12 @@ import { useAuthStore } from '../stores/authStore';
 import { useToast } from '../components/common/Toast';
 import { formatDateInput, formatDateTime } from '../utils/date';
 import { money } from '../utils/money';
-import { CalendarDays, History, LayoutGrid, PanelLeftClose, PanelLeftOpen, Printer, Search, ShoppingCart, ReceiptText, Trash2, WalletCards } from 'lucide-react';
+import { CalendarDays, CloudOff, History, LayoutGrid, PanelLeftClose, PanelLeftOpen, Printer, RefreshCw, Search, ShoppingCart, ReceiptText, Trash2, WalletCards } from 'lucide-react';
 import { isMirrorModeActive } from '../stores/mirrorStore';
 import { PrinterOutputService } from '../services/printerOutputService';
+import { hasApiBaseUrl } from '../services/api/client';
+import { requestSync, subscribeSync } from '../services/api/syncScheduler';
+import { SyncQueueRepository } from '../db/syncQueue';
 import { formatSalesSummaryText } from '../services/receiptTextFormatter';
 import {
   getReceiptContentSettings,
@@ -79,7 +82,9 @@ function composeParkTagName(tags: Record<string, string>) {
   return PARK_TAG_GROUPS.map((group) => tags[group.key]).filter(Boolean).join(' ');
 }
 
-const billStatusTabs: Array<{ value: '' | SaleStatus; label: string }> = [
+type HistoryStatusFilter = '' | SaleStatus | '__unsynced__';
+
+const BILL_STATUS_TABS: Array<{ value: HistoryStatusFilter; label: string }> = [
   { value: 'completed', label: 'สำเร็จ' },
   { value: 'voided', label: 'Void' },
   { value: 'refunded', label: 'Refund' },
@@ -113,7 +118,7 @@ export function PosPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyDate, setHistoryDate] = useState(formatDateInput());
-  const [historyStatus, setHistoryStatus] = useState<'' | SaleStatus>('completed');
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>('completed');
   const [historySelected, setHistorySelected] = useState<SaleDetail | null>(null);
   const [historyPrinting, setHistoryPrinting] = useState(false);
   const [parkedOpen, setParkedOpen] = useState(false);
@@ -144,8 +149,9 @@ export function PosPage() {
     window.addEventListener('calpos:catalog-updated', onCatalogUpdated);
     return () => window.removeEventListener('calpos:catalog-updated', onCatalogUpdated);
   }, [reloadCategories, reloadProducts]);
+
   const { data: historyBills, reload: reloadHistory } = useAsync(
-    () => SaleRepository.searchSales({ query: historyQuery, date: historyDate, status: historyStatus }),
+    () => SaleRepository.searchSales({ query: historyQuery, date: historyDate, status: historyStatus === '__unsynced__' ? '' : historyStatus }),
     [historyQuery, historyDate, historyStatus],
   );
   const { data: parkedBills, reload: reloadParkedBills } = useAsync(
@@ -160,6 +166,31 @@ export function PosPage() {
     () => ReportRepository.getDailySummary(summaryDate),
     [summaryDate],
   );
+  const { data: unsyncedBills, reload: reloadUnsyncedBills } = useAsync(
+    async () => {
+      if (!hasApiBaseUrl) return [];
+      const ids = await SyncQueueRepository.getUnsyncedSaleIds();
+      if (!ids.length) return [];
+      return SaleRepository.getSalesByIds(ids);
+    },
+    [],
+  );
+  const unsyncedCount = unsyncedBills?.length ?? 0;
+  const unsyncedSet = useMemo(() => new Set((unsyncedBills ?? []).map((d) => d.sale.id)), [unsyncedBills]);
+
+  // เมื่อ sync สำเร็จ → รีโหลดบิลที่ยังไม่ถูก sync ให้อัตโนมัติ
+  // (บิลที่ sync สำเร็จจะหายออกจาก queue → หายจาก tab "ไม่ถูก sync")
+  const lastSyncSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hasApiBaseUrl) return;
+    return subscribeSync((s) => {
+      if (s.lastSyncedAt && s.lastSyncedAt !== lastSyncSig.current) {
+        lastSyncSig.current = s.lastSyncedAt;
+        void reloadUnsyncedBills();
+        void reloadHistory();
+      }
+    });
+  }, [reloadUnsyncedBills, reloadHistory]);
 
   const filteredProducts = useMemo(() => (products ?? []).filter((product) => {
     const matchCategory = categoryId === 'all' || product.categoryId === categoryId;
@@ -472,10 +503,16 @@ export function PosPage() {
                 onClick={() => {
                   setHistoryOpen(true);
                   reloadHistory();
+                  void reloadUnsyncedBills();
                 }}
-                className="flex items-center justify-center gap-2 rounded-md border border-primary-200 bg-primary-50 px-4 py-3 font-black text-primary-700 hover:bg-primary-100"
+                className="relative flex items-center justify-center gap-2 rounded-md border border-primary-200 bg-primary-50 px-4 py-3 font-black text-primary-700 hover:bg-primary-100"
               >
                 <History size={20} /> ประวัติบิล
+                {unsyncedCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white shadow">
+                    {unsyncedCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -752,88 +789,147 @@ export function PosPage() {
           </div>
         </Modal>
       )}
-      {historyOpen && (
-        <Modal title="ประวัติบิลในหน้าขาย" onClose={() => setHistoryOpen(false)} wide>
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
-              <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3">
-                <Search size={18} className="text-slate-400" />
-                <input className="w-full border-0 py-2.5 focus:ring-0" placeholder="ค้นหาเลขบิล" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} />
-              </label>
-              <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3">
-                <CalendarDays size={18} className="text-slate-400" />
-                <input type="date" className="w-full border-0 py-2.5 focus:ring-0" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} />
-              </label>
-              <button className="rounded-md bg-primary-600 px-4 py-2 font-black text-white" onClick={reloadHistory}>รีเฟรช</button>
-            </div>
+      {historyOpen && (() => {
+        const isUnsyncedTab = historyStatus === '__unsynced__';
+        // Regular tabs: exclude bills that are stuck in sync queue (they live in "__unsynced__" tab)
+        // Unsynced tab: show exactly those bills
+        const displayBills = isUnsyncedTab
+          ? (unsyncedBills ?? [])
+          : (historyBills ?? []).filter((d) => !unsyncedSet.has(d.sale.id));
+        const displaySummary = {
+          bills: displayBills.length,
+          total: displayBills.reduce((sum, d) => sum + d.sale.total, 0),
+          items: displayBills.reduce((sum, d) => sum + d.items.reduce((s, i) => s + i.quantity, 0), 0),
+        };
+        const allTabs: Array<{ value: HistoryStatusFilter; label: string; badge?: number }> = [
+          ...BILL_STATUS_TABS,
+          ...(hasApiBaseUrl ? [{ value: '__unsynced__' as const, label: 'ไม่ถูก sync', badge: unsyncedCount }] : []),
+        ];
+        return (
+          <Modal title="ประวัติบิลในหน้าขาย" onClose={() => setHistoryOpen(false)} wide>
+            <div className="space-y-4">
+              {!isUnsyncedTab && (
+                <div className="grid gap-3 md:grid-cols-[1fr_180px_auto]">
+                  <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3">
+                    <Search size={18} className="text-slate-400" />
+                    <input className="w-full border-0 py-2.5 focus:ring-0" placeholder="ค้นหาเลขบิล" value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} />
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3">
+                    <CalendarDays size={18} className="text-slate-400" />
+                    <input type="date" className="w-full border-0 py-2.5 focus:ring-0" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} />
+                  </label>
+                  <button className="rounded-md bg-primary-600 px-4 py-2 font-black text-white" onClick={reloadHistory}>รีเฟรช</button>
+                </div>
+              )}
 
-            <div className="flex flex-wrap items-center gap-2">
-              {billStatusTabs.map((tab) => (
-                <button
-                  key={tab.value || 'all'}
-                  className={`rounded-md border px-4 py-2 text-sm font-black ${historyStatus === tab.value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-200 bg-white text-slate-600'}`}
-                  onClick={() => setHistoryStatus(tab.value)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {allTabs.map((tab) => (
+                  <button
+                    key={tab.value || 'all'}
+                    className={`relative rounded-md border px-4 py-2 text-sm font-black ${historyStatus === tab.value ? (tab.value === '__unsynced__' ? 'border-amber-500 bg-amber-500 text-white' : 'border-primary-600 bg-primary-600 text-white') : (tab.value === '__unsynced__' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600')}`}
+                    onClick={() => setHistoryStatus(tab.value)}
+                  >
+                    {tab.value === '__unsynced__' && <CloudOff size={14} className="mr-1 inline-block" />}
+                    {tab.label}
+                    {(tab.badge ?? 0) > 0 && (
+                      <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-black text-white">
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-md bg-slate-50 p-3">
-                <div className="text-xs font-bold text-slate-500">จำนวนบิล</div>
-                <div className="text-2xl font-black text-slate-950">{historySummary.bills.toLocaleString('th-TH')}</div>
-              </div>
-              <div className="rounded-md bg-slate-50 p-3">
-                <div className="text-xs font-bold text-slate-500">จำนวนรายการ</div>
-                <div className="text-2xl font-black text-slate-950">{historySummary.items.toLocaleString('th-TH')}</div>
-              </div>
-              <div className="rounded-md bg-primary-50 p-3">
-                <div className="text-xs font-bold text-primary-700">ยอดรวม</div>
-                <div className="text-2xl font-black text-primary-900">{money(historySummary.total)}</div>
-              </div>
-            </div>
+              {/* Unsynced tab: banner + retry button */}
+              {isUnsyncedTab && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm font-bold text-amber-800">
+                    <CloudOff size={16} />
+                    {unsyncedCount > 0
+                      ? `มี ${unsyncedCount} บิลที่ยังไม่ถูก sync ขึ้น cloud — ระบบจะลอง upload ใหม่เมื่อออนไลน์`
+                      : 'บิลทุกรายการถูก sync ขึ้น cloud แล้ว ✓'}
+                  </div>
+                  {unsyncedCount > 0 && (
+                    <button
+                      type="button"
+                      className="flex shrink-0 items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-black text-white hover:bg-amber-700"
+                      onClick={() => {
+                        void SyncQueueRepository.resetFailed().then(() => requestSync({ immediate: true }));
+                        void reloadUnsyncedBills();
+                      }}
+                    >
+                      <RefreshCw size={13} /> ลอง sync ใหม่
+                    </button>
+                  )}
+                </div>
+              )}
 
-            <div className="max-h-[52vh] overflow-auto rounded-lg border border-slate-200">
-              <table className="w-full min-w-[820px] text-sm">
-                <thead className="bg-slate-50 text-left text-slate-500">
-                  <tr>
-                    <th className="p-3">เลขบิล</th>
-                    <th>วันที่</th>
-                    <th>พนักงาน</th>
-                    <th>รายการ</th>
-                    <th>ชำระเงิน</th>
-                    <th>ยอดรวม</th>
-                    <th>สถานะ</th>
-                    <th className="p-3 text-right">ดู</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(historyBills ?? []).map((detail) => (
-                    <tr key={detail.sale.id} className="border-t border-slate-100 hover:bg-primary-50/50">
-                      <td className="p-3 font-black text-slate-900">{detail.sale.billNo}</td>
-                      <td>{formatDateTime(detail.sale.createdAt)}</td>
-                      <td>{detail.sale.cashierName}</td>
-                      <td>{detail.items.reduce((sum, item) => sum + item.quantity, 0).toLocaleString('th-TH')}</td>
-                      <td>{paymentLabel(detail)}</td>
-                      <td className="font-black text-emerald-700">{money(detail.sale.total)}</td>
-                      <td>
-                        <span className={`rounded-full px-2 py-1 text-xs font-bold ${detail.sale.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                          {statusLabel(detail.sale.status)}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <button className="rounded-md bg-slate-100 px-3 py-2 font-bold text-slate-700" onClick={() => setHistorySelected(detail)}>รายละเอียด</button>
-                      </td>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-md bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-500">จำนวนบิล</div>
+                  <div className="text-2xl font-black text-slate-950">{displaySummary.bills.toLocaleString('th-TH')}</div>
+                </div>
+                <div className="rounded-md bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-500">จำนวนรายการ</div>
+                  <div className="text-2xl font-black text-slate-950">{displaySummary.items.toLocaleString('th-TH')}</div>
+                </div>
+                <div className={`rounded-md p-3 ${isUnsyncedTab ? 'bg-amber-50' : 'bg-primary-50'}`}>
+                  <div className={`text-xs font-bold ${isUnsyncedTab ? 'text-amber-700' : 'text-primary-700'}`}>ยอดรวม</div>
+                  <div className={`text-2xl font-black ${isUnsyncedTab ? 'text-amber-900' : 'text-primary-900'}`}>{money(displaySummary.total)}</div>
+                </div>
+              </div>
+
+              <div className="max-h-[52vh] overflow-auto rounded-lg border border-slate-200">
+                <table className="w-full min-w-[820px] text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="p-3">เลขบิล</th>
+                      <th>วันที่</th>
+                      <th>พนักงาน</th>
+                      <th>รายการ</th>
+                      <th>ชำระเงิน</th>
+                      <th>ยอดรวม</th>
+                      <th>สถานะ</th>
+                      <th className="p-3 text-right">ดู</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {(historyBills ?? []).length === 0 && <div className="p-8 text-center font-bold text-slate-500">ไม่พบบิลตามเงื่อนไข</div>}
+                  </thead>
+                  <tbody>
+                    {displayBills.map((detail) => (
+                      <tr key={detail.sale.id} className={`border-t border-slate-100 ${isUnsyncedTab ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-primary-50/50'}`}>
+                        <td className="p-3 font-black text-slate-900">{detail.sale.billNo}</td>
+                        <td>{formatDateTime(detail.sale.createdAt)}</td>
+                        <td>{detail.sale.cashierName}</td>
+                        <td>{detail.items.reduce((sum, item) => sum + item.quantity, 0).toLocaleString('th-TH')}</td>
+                        <td>{paymentLabel(detail)}</td>
+                        <td className="font-black text-emerald-700">{money(detail.sale.total)}</td>
+                        <td>
+                          {isUnsyncedTab ? (
+                            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">
+                              <CloudOff size={11} /> sync ไม่สำเร็จ
+                            </span>
+                          ) : (
+                            <span className={`rounded-full px-2 py-1 text-xs font-bold ${detail.sale.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                              {statusLabel(detail.sale.status)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <button className="rounded-md bg-slate-100 px-3 py-2 font-bold text-slate-700" onClick={() => setHistorySelected(detail)}>รายละเอียด</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {displayBills.length === 0 && (
+                  <div className="p-8 text-center font-bold text-slate-500">
+                    {isUnsyncedTab ? 'ไม่มีบิลที่รอ sync ✓' : 'ไม่พบบิลตามเงื่อนไข'}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
       {historySelected && (
         <Modal title={`รายละเอียดบิล ${historySelected.sale.billNo}`} onClose={() => setHistorySelected(null)} wide>
           <div className="grid gap-4 md:grid-cols-[1fr_280px]">
