@@ -17,19 +17,33 @@ const DRAWER_ACTION_LABEL: Record<string, string> = {
   open_only: 'แลกเงิน',
 };
 
+async function loadLocalReport(date: string) {
+  const [summary, hourly, products, payments, employees] = await Promise.all([
+    ReportRepository.getDailySummary(date),
+    ReportRepository.getHourlySales(date),
+    ReportRepository.getProductSales(date),
+    ReportRepository.getPaymentSummary(date),
+    ReportRepository.getEmployeeSales(date),
+  ]);
+  return { summary, hourly, products, payments, employees };
+}
+
 export function DashboardPage() {
   const [date, setDate] = useState(formatDateInput());
+  const [usingLocalFallback, setUsingLocalFallback] = useState(false);
   const { data: daily, loading, reload } = useAsync(async () => {
-    if (hasApiBaseUrl && navigator.onLine) return reportsApi.daily(date);
-
-    const [summary, hourly, products, payments, employees] = await Promise.all([
-      ReportRepository.getDailySummary(date),
-      ReportRepository.getHourlySales(date),
-      ReportRepository.getProductSales(date),
-      ReportRepository.getPaymentSummary(date),
-      ReportRepository.getEmployeeSales(date),
-    ]);
-    return { summary, hourly, products, payments, employees };
+    if (hasApiBaseUrl && navigator.onLine) {
+      try {
+        const result = await reportsApi.daily(date);
+        setUsingLocalFallback(false);
+        return result;
+      } catch {
+        // API unavailable (backend starting up / offline) → show local data
+        setUsingLocalFallback(true);
+      }
+    }
+    setUsingLocalFallback(false);
+    return loadLocalReport(date);
   }, [date]);
 
   // Category breakdown and cash-drawer activity are computed locally from this
@@ -74,6 +88,18 @@ export function DashboardPage() {
         subtitle="สรุปรายวัน รายชั่วโมง สินค้าขายดี ช่องทางชำระเงิน และยอดขายพนักงาน"
         action={<input type="date" className="rounded-md border-slate-300" value={date} onChange={(event) => setDate(event.target.value)} />}
       />
+      {usingLocalFallback && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm">
+          <span className="font-bold text-amber-800">⚠️ แสดงข้อมูลจากเครื่องนี้ (cloud ไม่พร้อมใช้งาน — ข้อมูลจากเครื่องอื่นอาจไม่ครบ)</span>
+          <button
+            type="button"
+            className="shrink-0 rounded-md bg-amber-600 px-3 py-1 text-xs font-black text-white hover:bg-amber-700"
+            onClick={() => { void reload(); void reloadCategorySales(); void reloadDrawer(); }}
+          >
+            ลองใหม่
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {[
           ['ยอดขายสุทธิ', money(summary?.totalSales ?? 0)],
