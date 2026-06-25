@@ -5,6 +5,7 @@ import { requestSync, subscribeSync } from '../../services/api/syncScheduler';
 import { hasApiBaseUrl } from '../../services/api/client';
 
 const LAST_READ_KEY = 'calpos_notif_last_read_at';
+const CLEARED_AT_KEY = 'calpos_notif_cleared_at';
 
 function actionLabel(table: string, action: string): string {
   if (action === 'delete') {
@@ -46,7 +47,8 @@ export function NotificationBell({ tone = 'light' }: { tone?: 'light' | 'dark' }
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    const data = await notificationsApi.fetchActivity();
+    const clearedAt = localStorage.getItem(CLEARED_AT_KEY) ?? undefined;
+    const data = await notificationsApi.fetchActivity(clearedAt);
     setItems(data);
   }, []);
 
@@ -140,15 +142,32 @@ export function NotificationBell({ tone = 'light' }: { tone?: 'light' | 'dark' }
         <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <span className="font-black text-slate-800">แจ้งเตือน</span>
-            <button
-              type="button"
-              onClick={handleUpdate}
-              disabled={refreshing}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold text-primary-600 hover:bg-primary-50 disabled:opacity-60"
-            >
-              <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-              อัปเดตข้อมูลร้าน
-            </button>
+            <div className="flex items-center gap-1">
+              {items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date().toISOString();
+                    localStorage.setItem(CLEARED_AT_KEY, now);
+                    localStorage.setItem(LAST_READ_KEY, now);
+                    setItems([]);
+                    setLastReadAt(now);
+                  }}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100"
+                >
+                  ล้างทั้งหมด
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleUpdate}
+                disabled={refreshing}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-bold text-primary-600 hover:bg-primary-50 disabled:opacity-60"
+              >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+                อัปเดต
+              </button>
+            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto">
