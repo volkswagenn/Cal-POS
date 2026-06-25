@@ -36,51 +36,56 @@ function shiftDate(dateStr: string, days: number): string {
 
 export function DashboardPage() {
   const [date, setDate] = useState(formatDateInput());
-  const [usingLocalFallback, setUsingLocalFallback] = useState(false);
-  const { data: daily, loading, reload } = useAsync(async () => {
-    if (hasApiBaseUrl && navigator.onLine) {
-      try {
-        const result = await reportsApi.daily(date);
-        setUsingLocalFallback(false);
-        return result;
-      } catch {
-        // API unavailable (backend starting up / offline) → show local data
-        setUsingLocalFallback(true);
-        return loadLocalReport(date);
-      }
+
+  // Step 1 — Local IndexedDB: loads instantly, always reflects THIS device's sales.
+  // User sees real numbers immediately instead of waiting for the cloud API.
+  const { data: localData, reload: reloadLocal } = useAsync(
+    () => loadLocalReport(date),
+    [date],
+  );
+
+  // Step 2 — Cloud API: aggregates ALL devices, loaded in the background.
+  // When it arrives it replaces local data; if it fails, local data stays visible.
+  const [cloudFailed, setCloudFailed] = useState(false);
+  const { data: cloudData, reload: reloadCloud } = useAsync(async () => {
+    if (!hasApiBaseUrl || !navigator.onLine) {
+      setCloudFailed(false);
+      return null;
     }
-    setUsingLocalFallback(false);
-    return loadLocalReport(date);
+    try {
+      const result = await reportsApi.daily(date);
+      setCloudFailed(false);
+      return result;
+    } catch {
+      setCloudFailed(true);
+      return null;
+    }
   }, [date]);
 
-  // Category breakdown and cash-drawer activity are computed locally from this
-  // device's database (drawer logs are not synced to the cloud), so they're loaded
-  // separately from the main daily report regardless of online/offline mode.
+  // Category breakdown and cash-drawer are always local (not synced to cloud).
   const { data: categorySales, reload: reloadCategorySales } = useAsync(() => ReportRepository.getCategorySales(date), [date]);
   const { data: drawer, reload: reloadDrawer } = useAsync(() => ReportRepository.getDrawerSummary(date), [date]);
 
-  // Reload the dashboard whenever a sync completes so new sales appear without
-  // a manual refresh. Two triggers:
-  //   1. lastSyncedAt changes → new data pulled from cloud (normal case)
-  //   2. isSyncing flips true→false with no error → sync just finished;
-  //      catches the cold-start recovery case where nothing new was pulled
-  //      but the API is now reachable and we should switch from local fallback
-  //      back to the cloud report.
+  // Reload all sources on sync completion or when new data arrives from cloud.
   const lastSyncSig = useRef<string | null>(null);
   const wasSyncing = useRef(false);
   useEffect(() => subscribeSync((s) => {
     const sigChanged = s.lastSyncedAt != null && s.lastSyncedAt !== lastSyncSig.current;
     if (sigChanged) lastSyncSig.current = s.lastSyncedAt;
-
     const justFinished = wasSyncing.current && !s.isSyncing && !s.lastSyncError;
     wasSyncing.current = s.isSyncing;
-
     if (sigChanged || justFinished) {
-      void reload();
+      void reloadLocal();
+      void reloadCloud();
       void reloadCategorySales();
       void reloadDrawer();
     }
-  }), [reload, reloadCategorySales, reloadDrawer]);
+  }), [reloadLocal, reloadCloud, reloadCategorySales, reloadDrawer]);
+
+  // Prefer cloud data (all devices); while cloud loads, show local (this device).
+  const daily = cloudData ?? localData;
+  // True only when cloud was explicitly tried and failed (not just "still loading").
+  const usingLocalFallback = cloudFailed && cloudData === null;
 
   const summary = daily?.summary;
   const categoryTotal = useMemo(() => (categorySales ?? []).reduce((sum, row) => sum + row.revenue, 0), [categorySales]);
@@ -98,7 +103,8 @@ export function DashboardPage() {
 
   return (
     <div className="relative p-4 md:p-6">
-      <LoadingOverlay show={loading && !daily} />
+      {/* Show spinner only on first load before ANY data (local or cloud) is ready */}
+      <LoadingOverlay show={!daily} />
       <PageHeader
         title="แดชบอร์ด"
         subtitle="สรุปรายวัน รายชั่วโมง สินค้าขายดี ช่องทางชำระเงิน และยอดขายพนักงาน"
@@ -110,18 +116,23 @@ export function DashboardPage() {
           </div>
         }
       />
-      {usingLocalFallback && (
+      {/* Cloud failed → show warning; cloud still loading → show subtle chip */}
+      {usingLocalFallback ? (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm">
           <span className="font-bold text-amber-800">⚠️ แสดงข้อมูลจากเครื่องนี้ (cloud ไม่พร้อมใช้งาน — ข้อมูลจากเครื่องอื่นอาจไม่ครบ)</span>
           <button
             type="button"
             className="shrink-0 rounded-md bg-amber-600 px-3 py-1 text-xs font-black text-white hover:bg-amber-700"
-            onClick={() => { void reload(); void reloadCategorySales(); void reloadDrawer(); }}
+            onClick={() => { void reloadCloud(); void reloadLocal(); void reloadCategorySales(); void reloadDrawer(); }}
           >
             ลองใหม่
           </button>
         </div>
-      )}
+      ) : cloudData === null && localData !== null && hasApiBaseUrl && navigator.onLine ? (
+        <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600">
+          📱 แสดงข้อมูลเครื่องนี้ก่อน — กำลังโหลดจาก cloud...
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {[
           ['ยอดขายสุทธิ', money(summary?.totalSales ?? 0)],
