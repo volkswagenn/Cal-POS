@@ -123,8 +123,8 @@ export function SubPosTab() {
       {/* Device code */}
       <Card className="overflow-hidden">
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <h2 className="font-black text-slate-900">รหัสประจำเครื่องนี้</h2>
-          <p className="mt-0.5 text-xs font-medium text-slate-500">รหัสนี้ใช้ระบุตัวตนในระบบ SubPOS — แก้ไขได้ที่ ตั้งค่าเครื่องพิมพ์ → ข้อมูลในใบเสร็จ</p>
+          <h2 className="font-black text-slate-900">รหัส POS ประจำเครื่องนี้</h2>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">รหัสถาวรประจำเครื่อง (ไม่เปลี่ยนแปลง) — ใช้ให้เครื่องอื่นระบุเครื่องนี้เมื่อต้องการเชื่อมต่อ</p>
         </div>
         <div className="p-5">
           <div className="inline-flex items-center gap-3 rounded-xl border-2 border-primary-200 bg-primary-50 px-6 py-3">
@@ -139,9 +139,9 @@ export function SubPosTab() {
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h2 className="font-black text-slate-900">รับคำสั่งจาก SubPOS</h2>
+              <h2 className="font-black text-slate-900">ใช้เครื่องนี้เป็น MainPOS</h2>
               <p className="mt-0.5 text-xs font-medium text-slate-500">
-                เครื่องอื่นสามารถเชื่อมต่อและสั่งงานเครื่องพิมพ์ / ลิ้นชักของเครื่องนี้ได้
+                เครื่องนี้ต่ออุปกรณ์ (เครื่องพิมพ์ / ลิ้นชัก) — อนุญาตให้ SubPOS เชื่อมต่อเข้ามาสั่งงานอุปกรณ์ได้
               </p>
             </div>
             <button type="button" onClick={reloadLinks} className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
@@ -199,7 +199,7 @@ export function SubPosTab() {
           )}
 
           {!noCloud && pendingApprovals.length === 0 && linksAsMain.filter((l) => l.status === 'active').length === 0 && (
-            <p className="text-sm text-slate-400">ยังไม่มี SubPOS เชื่อมต่อ — SubPOS สามารถส่งคำขอโดยใช้รหัสเครื่องนี้</p>
+            <p className="text-sm text-slate-400">ยังไม่มี SubPOS เชื่อมต่อ — SubPOS สามารถส่งคำขอโดยใช้รหัส POS ของเครื่องนี้</p>
           )}
         </div>
       </Card>
@@ -207,9 +207,9 @@ export function SubPosTab() {
       {/* SubPOS section — this device connects to a MainPOS */}
       <Card className="overflow-hidden">
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <h2 className="font-black text-slate-900">เชื่อมต่อกับ MainPOS</h2>
+          <h2 className="font-black text-slate-900">ใช้เครื่องนี้เป็น SubPOS</h2>
           <p className="mt-0.5 text-xs font-medium text-slate-500">
-            สั่งให้ MainPOS พิมพ์ใบเสร็จ / เปิดลิ้นชักหลังจากบันทึกการขาย
+            เครื่องนี้ไม่ต่ออุปกรณ์ — เชื่อมต่อกับ MainPOS เพื่อสั่งพิมพ์ใบเสร็จ / เปิดลิ้นชักหลังบันทึกการขาย
           </p>
         </div>
         <div className="space-y-4 p-5">
@@ -232,16 +232,17 @@ export function SubPosTab() {
               {linkStatus === 'none' && (
                 <div className="space-y-2">
                   <label className="block text-sm font-bold text-slate-700">
-                    รหัสเครื่อง MainPOS
+                    รหัส POS ของ MainPOS
                     <div className="mt-1 flex gap-2">
                       <input
                         type="text"
-                        maxLength={6}
-                        placeholder="เช่น POS1"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="เช่น 7751"
                         value={inputCode}
-                        onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                        onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))}
                         onKeyDown={(e) => e.key === 'Enter' && void handleRequestLink()}
-                        className="flex-1 rounded-md border border-slate-300 px-3 py-2 font-mono text-sm font-bold uppercase tracking-widest focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        className="flex-1 rounded-md border border-slate-300 px-3 py-2 font-mono text-lg font-bold tracking-widest focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       />
                       <button
                         type="button"
@@ -254,7 +255,7 @@ export function SubPosTab() {
                     </div>
                   </label>
                   {reqError && <p className="text-sm font-bold text-red-600">{reqError}</p>}
-                  <p className="text-xs text-slate-500">ใส่รหัสเครื่องของ MainPOS — MainPOS ต้องอนุมัติก่อนจึงจะเชื่อมต่อได้</p>
+                  <p className="text-xs text-slate-500">ใส่รหัส POS 4 หลักของ MainPOS — MainPOS ต้องอนุมัติก่อนจึงจะเชื่อมต่อได้</p>
                 </div>
               )}
 

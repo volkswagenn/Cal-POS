@@ -1289,7 +1289,7 @@ export function SettingsPage() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-bold text-slate-700">รหัสเครื่อง (ขึ้นต้นเลขบิล)</span>
                       <span className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">
-                        รหัส SubPOS:
+                        รหัส POS:
                         <span className="font-mono font-black tracking-widest text-primary-700">{getDevicePermanentCode()}</span>
                       </span>
                     </div>
@@ -1305,7 +1305,7 @@ export function SettingsPage() {
                       }}
                     />
                     <span className="block text-xs font-medium text-slate-500">
-                      ใช้แยกว่าบิลออกจากเครื่องไหน (A–Z, 0–9) — หากว่างจะใช้รหัส SubPOS แทน
+                      ใช้แยกว่าบิลออกจากเครื่องไหน (A–Z, 0–9) — หากว่างจะใช้รหัส POS แทน
                     </span>
                   </div>
                   <label className="block text-sm font-bold text-slate-700 sm:col-span-2">
