@@ -1,5 +1,5 @@
 import { apiRequest, hasApiBaseUrl } from './client';
-import { getDeviceCode } from '../../utils/deviceCode';
+import { getDevicePermanentCode } from '../../utils/deviceCode';
 
 const DEVICE_ID_KEY = 'calpos_device_id';
 
@@ -21,13 +21,13 @@ export type ActivityItem = {
 };
 
 export const notificationsApi = {
-  /** Tell the server this device's human-readable code ("POS1"). */
+  /** Register this device's permanent 4-digit code with the server (used for SubPOS lookup). */
   async registerDevice(): Promise<void> {
     if (!hasApiBaseUrl || !navigator.onLine) return;
     try {
       await apiRequest('/api/notifications/device', {
         method: 'POST',
-        body: JSON.stringify({ deviceId: getDeviceId(), code: getDeviceCode() }),
+        body: JSON.stringify({ deviceId: getDeviceId(), code: getDevicePermanentCode() }),
       });
     } catch {
       // Non-critical: notification labels just fall back to a short id.

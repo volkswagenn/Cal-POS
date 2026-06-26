@@ -20,7 +20,7 @@ import { ReceiptCanvasPreview } from '../components/pos/ReceiptCanvasPreview';
 import { useAuthStore } from '../stores/authStore';
 import { usePrinterLiveStatus } from '../hooks/usePrinterLiveStatus';
 import { usePermissions } from '../hooks/usePermissions';
-import { getDeviceCode, setDeviceCode, DEVICE_CODE_MAX_LEN } from '../utils/deviceCode';
+import { getDeviceCode, getDevicePermanentCode, setDeviceCode, DEVICE_CODE_MAX_LEN } from '../utils/deviceCode';
 import { ALL_PAYMENT_METHODS, PAYMENT_METHODS_SETTING_KEY, parseEnabledPaymentMethods, type PaymentMethodId } from './PaymentSettingsPage';
 import { DISCOUNT_APPROVAL_REQUIRED_KEY } from '../utils/discountApproval';
 import { LOGIN_SECURITY_CONFIG_KEY, defaultLoginSecurityConfig, parseLoginSecurityConfig } from '../utils/loginSecurity';
@@ -1285,23 +1285,29 @@ export function SettingsPage() {
                       <option value="continuous">นับต่อเนื่อง</option>
                     </select>
                   </label>
-                  <label className="block text-sm font-bold text-slate-700">
-                    รหัสเครื่อง (ขึ้นต้นเลขบิล)
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-slate-700">รหัสเครื่อง (ขึ้นต้นเลขบิล)</span>
+                      <span className="flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">
+                        รหัส SubPOS:
+                        <span className="font-mono font-black tracking-widest text-primary-700">{getDevicePermanentCode()}</span>
+                      </span>
+                    </div>
                     <input
-                      className="mt-1 w-full rounded-md border-slate-300 uppercase tracking-widest"
+                      className="w-full rounded-md border-slate-300 uppercase tracking-widest"
                       defaultValue={getDeviceCode()}
                       maxLength={DEVICE_CODE_MAX_LEN}
-                      placeholder="เช่น POS1"
+                      placeholder={getDevicePermanentCode()}
                       onBlur={(event) => {
                         const saved = setDeviceCode(event.target.value);
                         event.target.value = saved;
                         toast(`ตั้งรหัสเครื่องเป็น "${saved}" — บิลถัดไปจะขึ้นต้นด้วย ${saved}-`, 'success');
                       }}
                     />
-                    <span className="mt-1 block text-xs font-medium text-slate-500">
-                      ใช้แยกว่าบิลออกจากเครื่องไหน เครื่องละรหัสไม่ซ้ำกัน (A–Z, 0–9)
+                    <span className="block text-xs font-medium text-slate-500">
+                      ใช้แยกว่าบิลออกจากเครื่องไหน (A–Z, 0–9) — หากว่างจะใช้รหัส SubPOS แทน
                     </span>
-                  </label>
+                  </div>
                   <label className="block text-sm font-bold text-slate-700 sm:col-span-2">
                     ข้อความท้ายใบเสร็จ
                     {settings !== null && (

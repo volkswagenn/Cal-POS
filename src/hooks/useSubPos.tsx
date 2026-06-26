@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { hasApiBaseUrl } from '../services/api/client';
 import { subposApi, type SubPosLinkRecord } from '../services/api/subposApi';
-import { getDeviceCode } from '../utils/deviceCode';
+import { getDevicePermanentCode } from '../utils/deviceCode';
 import { PrinterRepository } from '../db/repositories/PrinterRepository';
 import { PrinterOutputService } from '../services/printerOutputService';
 import { useToast } from '../components/common/Toast';
@@ -52,7 +52,7 @@ const SubPosContext = createContext<SubPosContextValue | null>(null);
 
 export function SubPosProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
-  const [deviceCode] = useState(getDeviceCode);
+  const [deviceCode] = useState(getDevicePermanentCode);
   const [linksAsMain, setLinksAsMain] = useState<SubPosLinkRecord[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [mainCode, setMainCode] = useState(() => localStorage.getItem(SUBPOS_MAIN_CODE_KEY) ?? '');
