@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useLocation } from 'react-router-dom';
-import { CreditCard, KeyRound, MonitorCog, Printer, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
+import { CreditCard, KeyRound, MonitorCog, MonitorSmartphone, Printer, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { Modal } from '../components/common/Modal';
@@ -24,6 +24,7 @@ import { getDeviceCode, setDeviceCode, DEVICE_CODE_MAX_LEN } from '../utils/devi
 import { ALL_PAYMENT_METHODS, PAYMENT_METHODS_SETTING_KEY, parseEnabledPaymentMethods, type PaymentMethodId } from './PaymentSettingsPage';
 import { DISCOUNT_APPROVAL_REQUIRED_KEY } from '../utils/discountApproval';
 import { LOGIN_SECURITY_CONFIG_KEY, defaultLoginSecurityConfig, parseLoginSecurityConfig } from '../utils/loginSecurity';
+import { SubPosTab } from '../components/settings/SubPosTab';
 
 const sizeOptions = [
   { value: 'small', title: 'เล็ก' },
@@ -44,7 +45,7 @@ const fontLimits = {
 } as const;
 
 type FontTarget = keyof typeof fontPresetPx;
-type SettingsTab = 'sale' | 'printer' | 'general' | 'payment' | 'login';
+type SettingsTab = 'sale' | 'printer' | 'general' | 'payment' | 'login' | 'subpos';
 type PrinterSubTab = 'connection' | 'receipt';
 type ConfirmDialogState = {
   title: string;
@@ -832,6 +833,9 @@ export function SettingsPage() {
         </button>
         <button className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black ${activeTab === 'general' ? 'bg-primary-600 text-white' : 'text-slate-600'}`} onClick={() => changeTab('general')}>
           <SlidersHorizontal size={17} /> ตั้งค่าทั่วไป
+        </button>
+        <button className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-black ${activeTab === 'subpos' ? 'bg-primary-600 text-white' : 'text-slate-600'}`} onClick={() => changeTab('subpos')}>
+          <MonitorSmartphone size={17} /> SubPOS
         </button>
       </div>
 
@@ -1672,6 +1676,8 @@ export function SettingsPage() {
           </Card>
         </div>
       )}
+
+      {activeTab === 'subpos' && <SubPosTab />}
 
       {showResetCatalogConfirm && (
         <Modal title="Reset ค่าเริ่มต้นรายการสินค้าและหมวดหมู่" onClose={() => setShowResetCatalogConfirm(false)}>

@@ -44,4 +44,16 @@ export const wsManager = {
       }
     }
   },
+
+  // Send a message to a single specific device (by deviceId) in the shop room.
+  // Used by the SubPOS relay system to target MainPOS or SubPOS directly.
+  pushToDevice(shopId: string, targetDeviceId: string, message: string): void {
+    const room = rooms.get(shopId);
+    if (!room) return;
+    for (const conn of room) {
+      if (conn.deviceId === targetDeviceId && conn.ws.readyState === 1 /* OPEN */) {
+        conn.ws.send(message);
+      }
+    }
+  },
 };

@@ -1,7 +1,7 @@
 import { useAuthStore } from '../../stores/authStore';
 import { API_BASE_URL, hasApiBaseUrl } from './client';
 
-type ServerMessage = { type: 'changes'; syncedAt: string } | { type: 'ping' } | { type: 'clear_sales' };
+type ServerMessage = { type: string; [key: string]: unknown };
 
 interface SyncWebSocketOptions {
   onChanges: () => void;
@@ -74,6 +74,9 @@ export class SyncWebSocket {
         const msg = JSON.parse(event.data as string) as ServerMessage;
         if (msg.type === 'changes') this.onChanges();
         if (msg.type === 'clear_sales') this.onClearSales?.();
+        if (msg.type.startsWith('subpos_')) {
+          window.dispatchEvent(new CustomEvent('calpos:ws-subpos', { detail: msg }));
+        }
       } catch {
         // ignore malformed messages
       }

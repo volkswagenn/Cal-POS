@@ -24,6 +24,7 @@ model Shop {
   backups      BackupSnapshot[]
   syncLogs     SyncLog[]
   devices      Device[]
+  subPosLinks  SubPosLink[]
 }
 
 model User {
@@ -257,4 +258,24 @@ model BackupSnapshot {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, createdAt])
+}
+
+model SubPosLink {
+  id             String   @id @default(cuid())
+  shopId         String
+  mainDeviceCode String
+  subDeviceCode  String
+  mainDeviceId   String
+  subDeviceId    String
+  status         String   @default("pending")
+  allowPrint     Boolean  @default(true)
+  allowDrawer    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, mainDeviceCode, subDeviceCode])
+  @@index([shopId, mainDeviceCode])
+  @@index([shopId, subDeviceId])
 }

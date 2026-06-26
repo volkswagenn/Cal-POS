@@ -10,6 +10,9 @@ import { SettingsRepository } from '../../db/repositories/SettingsRepository';
 import { useAsync } from '../../hooks/useAsync';
 import { useToast } from '../common/Toast';
 import { PAYMENT_METHODS_SETTING_KEY, parseEnabledPaymentMethods } from '../../pages/PaymentSettingsPage';
+import { hasApiBaseUrl } from '../../services/api/client';
+import { subposApi } from '../../services/api/subposApi';
+import { SUBPOS_LINK_STATUS_KEY, SUBPOS_USE_PRINTER_KEY, SUBPOS_USE_DRAWER_KEY } from '../../hooks/useSubPos';
 
 const ALL_METHODS: Array<{ id: PaymentMethod; label: string }> = [
   { id: 'cash', label: 'เงินสด' },
@@ -219,6 +222,16 @@ export function PaymentModal({ user, onClose, onSuccess }: { user: User; onClose
         });
         if (log.status === 'failed') toast(log.error ?? 'เปิดลิ้นชักไม่สำเร็จ', 'error');
       }
+      // Fire-and-forget SubPOS commands if this device is connected as SubPOS
+      if (hasApiBaseUrl && localStorage.getItem(SUBPOS_LINK_STATUS_KEY) === 'active') {
+        const useSubPrinter = localStorage.getItem(SUBPOS_USE_PRINTER_KEY) !== 'false';
+        const useSubDrawer = localStorage.getItem(SUBPOS_USE_DRAWER_KEY) !== 'false';
+        if (useSubPrinter) void subposApi.sendCommand('print_receipt', { detail });
+        if (useSubDrawer && payments.some((p) => p.method === 'cash' && p.receivedAmount > 0)) {
+          void subposApi.sendCommand('open_drawer', { detail });
+        }
+      }
+
       cart.clear();
       onSuccess(detail);
     } catch (error) {

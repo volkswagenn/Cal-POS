@@ -15,6 +15,7 @@ import { syncWsRoute } from './modules/sync/sync.ws.js';
 import { notificationRoutes } from './modules/sync/notifications.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { backupRoutes } from './modules/backup/backup.routes.js';
+import { subposRoutes } from './modules/subpos/subpos.routes.js';
 import { scheduleAutoBackup } from './modules/backup/backup.scheduler.js';
 import { scheduleSyncMaintenance } from './modules/sync/sync.maintenance.js';
 
@@ -69,6 +70,7 @@ export async function buildApp() {
   await app.register(notificationRoutes, { prefix: '/api/notifications' });
   await app.register(reportRoutes, { prefix: '/api/reports' });
   await app.register(backupRoutes, { prefix: '/api/backup' });
+  await app.register(subposRoutes, { prefix: '/api/subpos' });
 
   scheduleAutoBackup(app);
   scheduleSyncMaintenance(app);

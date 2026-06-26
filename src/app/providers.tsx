@@ -7,6 +7,7 @@ import { CatalogDefaultRepository } from '../db/repositories/CatalogDefaultRepos
 import { ToastProvider, useToast } from '../components/common/Toast';
 import { syncMirrorModeToBody } from '../stores/mirrorStore';
 import { useSync } from '../hooks/useSync';
+import { SubPosProvider } from '../hooks/useSubPos';
 
 // Runs inside ToastProvider so it can call useToast()
 function SyncManager() {
@@ -53,8 +54,10 @@ export function AppProviders() {
 
   return (
     <ToastProvider>
-      <SyncManager />
-      <RouterProvider router={router} />
+      <SubPosProvider>
+        <SyncManager />
+        <RouterProvider router={router} />
+      </SubPosProvider>
     </ToastProvider>
   );
 }
